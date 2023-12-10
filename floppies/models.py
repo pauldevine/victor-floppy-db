@@ -1,9 +1,17 @@
 from django.db import models
+from ckeditor.fields import RichTextField
 from django.utils.translation import gettext_lazy as _
 
 # Create your models here.
 #csv for internet archive upload:
 #  identifier,file,description,subject[0],subject[1],subject[2],title,creator,date,collection,mediatype,contributor,language
+
+class BaseModel(models.Model):
+    created_date = models.DateTimeField(auto_now_add=True)
+    modified_date = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
 
 class Creator(models.Model):
     name = models.CharField(max_length=500)
@@ -43,6 +51,24 @@ class Mediatype(models.Model):
         choices=Mediatypes.choices,
         default=Mediatypes.SOFTWARE,
     )
+
+    @classmethod
+    def get_mediatype_key(cls, name):
+        # Mapping of string representations to Mediatypes choices
+        name_to_key = {
+            "texts": cls.Mediatypes.TEXTS,
+            "etree": cls.Mediatypes.ETREE,
+            "audio": cls.Mediatypes.AUDIO,
+            "movies": cls.Mediatypes.MOVIES,
+            "software": cls.Mediatypes.SOFTWARE,
+            "image": cls.Mediatypes.IMAGE,
+            "data": cls.Mediatypes.DATA,
+            "web": cls.Mediatypes.WEB,
+            "collection": cls.Mediatypes.COLLECTION,
+            "account": cls.Mediatypes.ACCOUNT
+        }
+        return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
+
     def __str__(self):
         return self.mediatype
 
@@ -66,22 +92,23 @@ class Entry(models.Model):
     folder = models.FileField(upload_to="diskMusteringArea")
     title = models.CharField(max_length=500)
     creators = models.ManyToManyField(Creator)
-    date = models.DateField()
+    publicationDate = models.DateField(null=True, blank=True)
     collections = models.ManyToManyField(ArchCollection)
     mediatype = Mediatype()
     contributors = models.ManyToManyField(Contributor)
     languages = models.ManyToManyField(Language)
-    description = models.TextField()
+    description = RichTextField()
     subjects = models.ManyToManyField(Subject)
     archive = ZipArchive()
     photos = models.ManyToManyField(PhotoImage)
     randoFiles = models.ManyToManyField(RandoFile)
     uploaded = models.BooleanField(default=False)
     hasFluxFile = models.BooleanField(default=False)
-    hasFileContents = models.BooleanField(default=True)
+    hasFileContents = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
-    created_on = models.DateTimeField(auto_now_add=True)
+    def get_absolute_url(self):
+        return reverse("entry-detail", kwargs={"pk": self.pk})
 
     def __str__(self):
         return self.title
