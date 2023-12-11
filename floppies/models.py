@@ -1,5 +1,6 @@
 from django.db import models
 from ckeditor.fields import RichTextField
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 # Create your models here.
@@ -87,28 +88,28 @@ class ZipArchive(models.Model):
     archive = models.FileField(upload_to="archives")
 
 class Entry(models.Model):
-    identifier = models.SlugField(max_length=500)
-    fullArchivePath = models.URLField(max_length=200, null=True, blank=True)
-    folder = models.FileField(upload_to="diskMusteringArea")
+    identifier = models.CharField(max_length=500)
+    fullArchivePath = models.URLField(max_length=200, blank=True, null=True)
+    folder = models.CharField(max_length=2048, blank=True, null=True)
     title = models.CharField(max_length=500)
-    creators = models.ManyToManyField(Creator)
+    creators = models.ManyToManyField(Creator, blank=True)
     publicationDate = models.DateField(null=True, blank=True)
-    collections = models.ManyToManyField(ArchCollection)
+    collections = models.ManyToManyField(ArchCollection, blank=True)
     mediatype = Mediatype()
-    contributors = models.ManyToManyField(Contributor)
-    languages = models.ManyToManyField(Language)
-    description = RichTextField()
-    subjects = models.ManyToManyField(Subject)
+    contributors = models.ManyToManyField(Contributor, blank=True)
+    languages = models.ManyToManyField(Language, blank=True)
+    description = RichTextField(blank=True, null=True)
+    subjects = models.ManyToManyField(Subject, blank=True)
     archive = ZipArchive()
-    photos = models.ManyToManyField(PhotoImage)
-    randoFiles = models.ManyToManyField(RandoFile)
+    photos = models.ManyToManyField(PhotoImage, blank=True)
+    randoFiles = models.ManyToManyField(RandoFile, blank=True)
     uploaded = models.BooleanField(default=False)
     hasFluxFile = models.BooleanField(default=False)
     hasFileContents = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
     def get_absolute_url(self):
-        return reverse("entry-detail", kwargs={"pk": self.pk})
+        return reverse("floppies:entry-update", kwargs={"pk": self.pk})
 
     def __str__(self):
         return self.title

@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from django.urls import include
 
-from .views import EntryCreateView, EntryDeleteView, EntryUpdateView
+from .views import EntryCreateView, EntryDeleteView, EntryUpdateView, SearchResultsView
 from .models import Entry
 
 
@@ -15,4 +15,5 @@ urlpatterns = [
     path("entries/<int:pk>/", EntryUpdateView.as_view(), name="entry-update"),
     path("entries/<int:pk>/delete/", EntryDeleteView.as_view(), name="entry-delete"),
     path('ckeditor/', include('ckeditor_uploader.urls')),
+    path("search/", SearchResultsView.as_view(), name="search-results"),
 ]
