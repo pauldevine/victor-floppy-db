@@ -1,0 +1,65 @@
+* {
+ font-size: 100%;
+ font-family: "Droid Sans";
+}
+
+h1 { font-family: "Droid Sans"; font-size: 24px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 26.4px; } 
+h3 { font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 15.4px; } 
+p { font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 20px; } 
+blockquote { font-family: "Droid Sans"; font-size: 21px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 30px; } 
+pre { font-family: "Droid Sans"; font-size: 13px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 18.5714px; }
+
+
+h1 a {
+    color: green;
+}
+
+label {
+  font-family: "Droid Sans"; font-size: 10px; font-style: normal; font-variant: normal; font-weight: bold; line-height: 15.4px; 
+}
+
+textarea {
+   width: 700px;
+  height: 400px;
+  display: block;
+}
+
+select {
+  display: block;
+}
+
+
+input[type=text] { width:500px; }
+
+a:link {
+  text-decoration: none;
+}
+
+a:visited {
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.list-link { 
+    flex: 1;
+    font-family: "Droid Sans"; font-size: 10px; font-style: oblique; font-variant: normal; font-weight: normal; line-height: 15.4px; 
+ }
+
+.sidebar {
+  display: flex;
+}
+
+.pagination {
+    padding-top: 20px;
+ }
+
+.entries-list {
+    margin: 10px;
+ }
+
+.search-form {
+   flex: 1;
+} 
