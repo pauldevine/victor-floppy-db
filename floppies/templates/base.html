@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Sans" />
+    <link rel="stylesheet" type="text/css" href="/static/floppies/style.css">
+    <title>{% block title %}Victor Archive{% endblock %}</title>
+</head>
+
+<body>
+    <div class="sidebar" id="sidebar">
+    <div class="list-link">
+        {% block sidebar %}
+        <a href="/">List</a>
+        {% endblock %}
+    </div>
+    <div class="search-form">
+        <form action="{% url 'floppies:search-results' %}" method="get">
+            <input name="q" type="text" value="{% firstof request.GET.q%}" placeholder="Search...">
+        </form>
+    </div>
+    </div>
+
+    <div id="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

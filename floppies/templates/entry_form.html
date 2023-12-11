@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<script type="application/javascript" src="{% static 'floppies/functions.js' %}"></script>   
+<h1>{{ entry.title }}</h1>
+<a href="https://archive.org/details/{{ entry.identifier }}" class="archive-link">Archive</a>
+<form method="post">
+    {% csrf_token %}
+    <div>
+        {{ form.non_field_errors }}
+     <div>{{ form.uploaded.as_field_group }}
+        {{ form.hasFluxFile.as_field_group }}
+        {{ form.hasFileContents.as_field_group }}
+        {{ form.needsWork.as_field_group }}
+        {{ form.readyToUpload.as_field_group }}
+    </div>
+    <div>
+        <div>
+           <div>{{ form.identifier.as_field_group }}</div>
+        <div>{{ form.fullArchivePath.as_field_group }}</div>
+        {{ form.folder.as_field_group }}
+        </div>
+        {{ form.title.as_field_group }}
+        <div class="textMainEdit">{{ form.description.as_field_group }}</div>
+        {{ form.creators.as_field_group }}
+        {{ form.subjects.as_field_group }}
+        {{ form.contributors.as_field_group }}
+        {{ form.date.as_field_group }}
+        {{ form.collections.as_field_group }}
+        {{ form.mediatype.as_field_group }}
+        
+        {{ form.languages.as_field_group }}
+        
+        {{ form.archive.as_field_group }}
+        {{ form.photos.as_field_group }}
+        {{ form.randoFiles.as_field_group }}
+        
+        {{ form.created_on.as_field_group }}
+    </div>
+    </div>
+    <button type="submit">Save</button>
+</form>
+{% endblock %}
