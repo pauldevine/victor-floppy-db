@@ -29,12 +29,37 @@ class Contributor(models.Model):
     def __str__(self):
         return self.name
 
+class FluxFile(models.Model):
+    file = models.CharField(max_length=2048)
+    def __str__(self):
+        return self.file
+
 class Language(models.Model):
     name = models.CharField(max_length=100)
     def __str__(self):
         return self.name
 
-class Mediatype(models.Model):
+class PhotoImage(models.Model):
+    image = models.CharField(max_length=2048)
+    def __str__(self):
+        return self.image
+
+class RandoFile(models.Model):
+    file = models.CharField(max_length=2048)
+    def __str__(self):
+        return self.file
+
+class Subject(models.Model):
+    name = models.CharField(max_length=500)
+    def __str__(self):
+        return self.name
+      
+class ZipArchive(models.Model):
+    archive = models.CharField(max_length=2048)
+    def __str__(self):
+        return self.archive
+
+class Entry(models.Model):
     class Mediatypes(models.TextChoices):
         TEXTS = "TX", _("Texts")
         ETREE = "ET", _("Etree")
@@ -47,47 +72,24 @@ class Mediatype(models.Model):
         COLLECTION = "CO", _("Collection")
         ACCOUNT = "AC", _("Account")
 
-    mediatype = models.CharField(
-        max_length=2,
-        choices=Mediatypes.choices,
-        default=Mediatypes.SOFTWARE,
-    )
+        @classmethod
+        def get_mediatype_key(cls, name):
+            # Mapping of string representations to Mediatypes choices
+            name_to_key = {
+                "texts": cls.Mediatypes.TEXTS,
+                "etree": cls.Mediatypes.ETREE,
+                "audio": cls.Mediatypes.AUDIO,
+                "movies": cls.Mediatypes.MOVIES,
+                "software": cls.Mediatypes.SOFTWARE,
+                "image": cls.Mediatypes.IMAGE,
+                "data": cls.Mediatypes.DATA,
+                "web": cls.Mediatypes.WEB,
+                "collection": cls.Mediatypes.COLLECTION,
+                "account": cls.Mediatypes.ACCOUNT
+            }
+            return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
 
-    @classmethod
-    def get_mediatype_key(cls, name):
-        # Mapping of string representations to Mediatypes choices
-        name_to_key = {
-            "texts": cls.Mediatypes.TEXTS,
-            "etree": cls.Mediatypes.ETREE,
-            "audio": cls.Mediatypes.AUDIO,
-            "movies": cls.Mediatypes.MOVIES,
-            "software": cls.Mediatypes.SOFTWARE,
-            "image": cls.Mediatypes.IMAGE,
-            "data": cls.Mediatypes.DATA,
-            "web": cls.Mediatypes.WEB,
-            "collection": cls.Mediatypes.COLLECTION,
-            "account": cls.Mediatypes.ACCOUNT
-        }
-        return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
 
-    def __str__(self):
-        return self.mediatype
-
-class PhotoImage(models.Model):
-    image = models.FileField(upload_to="images")
-
-class RandoFile(models.Model):
-    file = models.FileField(upload_to="randoFiles")
-
-class Subject(models.Model):
-    name = models.CharField(max_length=500)
-    def __str__(self):
-        return self.name
-      
-class ZipArchive(models.Model):
-    archive = models.FileField(upload_to="archives")
-
-class Entry(models.Model):
     identifier = models.CharField(max_length=500)
     fullArchivePath = models.URLField(max_length=200, blank=True, null=True)
     folder = models.CharField(max_length=2048, blank=True, null=True)
@@ -95,17 +97,23 @@ class Entry(models.Model):
     creators = models.ManyToManyField(Creator, blank=True)
     publicationDate = models.DateField(null=True, blank=True)
     collections = models.ManyToManyField(ArchCollection, blank=True)
-    mediatype = Mediatype()
+    mediatype = models.CharField(
+        max_length=2,
+        choices=Mediatypes,
+        default=Mediatypes.SOFTWARE,
+    )
     contributors = models.ManyToManyField(Contributor, blank=True)
     languages = models.ManyToManyField(Language, blank=True)
     description = RichTextField(blank=True, null=True)
     subjects = models.ManyToManyField(Subject, blank=True)
-    archive = ZipArchive()
+    zipArchives = models.ManyToManyField(ZipArchive, blank=True)
     photos = models.ManyToManyField(PhotoImage, blank=True)
+    fluxFiles = models.ManyToManyField(FluxFile, blank=True)
     randoFiles = models.ManyToManyField(RandoFile, blank=True)
     uploaded = models.BooleanField(default=False)
     hasFluxFile = models.BooleanField(default=False)
     hasFileContents = models.BooleanField(default=False)
+    hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
     def get_absolute_url(self):

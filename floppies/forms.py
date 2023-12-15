@@ -3,6 +3,7 @@ from .models import Entry
 from ckeditor.widgets import CKEditorWidget
 
 class EntryForm(forms.ModelForm):
+    description = forms.CharField(widget=CKEditorWidget())
     class Meta:
         model = Entry
         fields = '__all__'  # Includes all fields from the Entry model

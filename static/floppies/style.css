@@ -45,6 +45,12 @@ a:hover {
 
 .list-link { 
     flex: 1;
+    margin: 5px;
+    font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: normal; line-height: 15.4px; 
+ }
+
+.archive-link { 
+    margin: 5px;
     font-family: "Droid Sans"; font-size: 10px; font-style: oblique; font-variant: normal; font-weight: normal; line-height: 15.4px; 
  }
 
@@ -62,4 +68,5 @@ a:hover {
 
 .search-form {
    flex: 1;
+   margin: 5px;
 } 

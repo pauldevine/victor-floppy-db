@@ -1,3 +1,5 @@
+#script to dowload the meta data for all floppies uploaded to internet archive
+#i used this script to initially populate the database
 import os
 import sys
 import json

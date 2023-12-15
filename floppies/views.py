@@ -49,7 +49,7 @@ class EntryUpdateView(generic.UpdateView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "photos", "randoFiles", "uploaded", "hasFluxFile", 
+        "subjects", "photos", "zipArchives", "fluxFiles", "mediatype", "randoFiles", "uploaded", "hasFluxFile", 
         "hasFileContents", "needsWork", "readyToUpload"]
     template_name = "entry_form.html"
 

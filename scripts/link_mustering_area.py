@@ -1,3 +1,7 @@
+#i used this script to initially take the meta data in the disk database I downloaded from the 
+#internet archive and find the corresponding folder on the Mac disk. I assumed
+#the filename on the local file system was the same as the title in the internet
+#archive, this worked for about 50% of the entries
 import os
 import sys
 import json
