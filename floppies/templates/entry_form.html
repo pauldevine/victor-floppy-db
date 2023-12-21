@@ -11,7 +11,8 @@
     {{ form.media }}
     <div>
         {{ form.non_field_errors }}
-     <div>{{ form.uploaded.as_field_group }}
+     <div>
+        {{ form.uploaded.as_field_group }}
         {{ form.hasFluxFile.as_field_group }}
         {{ form.hasFileContents.as_field_group }}
         {{ form.needsWork.as_field_group }}
@@ -20,9 +21,9 @@
     <div>
         <div>
            <div>{{ form.identifier.as_field_group }}</div>
-        <div>{{ form.fullArchivePath.as_field_group }}</div>
-        {{ form.folder.as_field_group }}
-        </div>
+           <div>{{ form.fullArchivePath.as_field_group }}</div>
+            {{ form.folder.as_field_group }}
+           </div>
         {{ form.title.as_field_group }}
         <div class="textMainEdit">{{ form.description.as_field_group }}</div>
         {{ form.creators.as_field_group }}
@@ -33,12 +34,40 @@
         {{ form.mediatype.as_field_group }}
     
         {{ form.languages.as_field_group }}
-        {{ form.zipArchives.as_field_group }}
+        {{ form.zipArchive.as_field_group }}
+
+        <h2>Contents of {{ form.zipArchives.archive }}</h2>
+            {% for item in zip_contents %}
+                <li>{{ item.zip_content.file }} (MD5: {{ item.zip_content.md5sum }})
+                    <ul>
+                        {% for flux_file in item.flux_files %}
+                            <li>Flux File: {{ flux_file.file }}
+                                {% if flux_file.info %}
+                                    <ul>
+                                        <li>InfoChunk: {{ flux_file.info }}</li>
+                                    </ul>
+                                {% endif %}
+                                {% if flux_file.meta %}
+                                    <ul>
+                                        <li>MetaChunk: {{ flux_file.meta }}</li>
+                                        <li>Publisher: {{ flux_file.meta.publisher }}</li>
+                                        <li>Developer: {{ flux_file.meta.developer }}</li>
+                                    </ul>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            {% empty %}
+                <li>No contents found in this archive.</li>
+            {% endfor %}
+        
         {{ form.photos.as_field_group }}
         {{ form.fluxFiles.as_field_group }}
         {{ form.randoFiles.as_field_group }}
         
         {{ form.created_on.as_field_group }}
+        {{ form.importRun.as_field_group }}
 
     </div>
     </div>

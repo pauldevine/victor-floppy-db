@@ -12,7 +12,7 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 import datetime
 
-from .models import Entry
+from .models import Entry, ZipContent, ZipArchive
 
 class IndexView(generic.ListView):
     template_name = "index.html"
@@ -27,7 +27,7 @@ class DetailView(generic.DetailView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "photos", "randoFiles", "uploaded", "hasFluxFile", 
+        "subjects", "photos", "randoFile", "uploaded", "hasFluxFile", 
         "hasFileContents", "needsWork", "readyToUpload"]
     template_name = "entry_detail.html"
 
@@ -49,9 +49,35 @@ class EntryUpdateView(generic.UpdateView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "photos", "zipArchives", "fluxFiles", "mediatype", "randoFiles", "uploaded", "hasFluxFile", 
-        "hasFileContents", "needsWork", "readyToUpload"]
+        "subjects", "photos", "zipArchives", "mediatype", "uploaded", "hasFluxFile", 
+        "hasFileContents", "needsWork", "readyToUpload", "importRun"]
     template_name = "entry_form.html"
+
+    def get_context_data(self, **kwargs):
+        # Call the base implementation first to get a context
+        context = super().get_context_data(**kwargs)
+
+        # Get the Entry instance being updated
+        entry = self.object
+
+        zip_contents = []
+        for zip_content in ZipContent.objects.filter(zipArchive__in=entry.zipArchives.all()):
+            # Fetch related FluxFile objects for this ZipContent
+            flux_files = list(zip_content.fluxes.all())
+
+            # Create a dictionary to store zip_content and its related objects
+            zip_content_data = {
+                'zip_content': zip_content,
+                'flux_files': flux_files,
+                'info_chunks': [flux_file.info for flux_file in flux_files if flux_file.info],
+                'meta_chunks': [flux_file.meta for flux_file in flux_files if flux_file.meta]
+            }
+
+            zip_contents.append(zip_content_data)
+
+        context["zip_contents"] = zip_contents
+        return context
+
 
 
 class EntryDeleteView(generic.DeleteView):

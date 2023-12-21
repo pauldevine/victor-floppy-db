@@ -2,6 +2,7 @@
 #into the disk database for each subfolder. The folder name becomes the title
 #any readme or diskid becomes the description
 import os
+from pathlib import Path
 import sys
 import json
 import django
@@ -13,12 +14,65 @@ import re
 from datetime import datetime, timedelta
 import argparse
 import zipfile
+import a2r_reader
+import hashlib
+from osxmetadata import OSXMetaData
 
 sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
+DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/'
+IMG_SUFFIXES = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
-from floppies.models import Entry, ArchCollection, Contributor, Creator, FluxFile, Language, Subject, PhotoImage, RandoFile, ZipArchive
+from floppies.models import Entry, ArchCollection, Contributor, Creator, FluxFile, InfoChunk
+from floppies.models import Language, MetaChunk, Subject, PhotoImage, RandoFile, ZipArchive, ZipContent, ImportRun
+
+def debug_print(folder_dict, message):
+    print(message)
+    folder_dict["debug_text"] += str(message)
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def get_files_with_tag_in_folder(tag_name, folder_path):
+    tagged_files = []
+
+    # Walk through the directory
+    for root, dirs, files in os.walk(folder_path):
+        for folder in dirs:
+            dir_path = os.path.join(root, folder)
+            metadata = OSXMetaData(dir_path)
+
+            # Check if the file has the specified tag
+            if any(tag.name == tag_name for tag in metadata.tags):
+                tagged_files.append(dir_path)
+    return tagged_files
+
+
+def find_description_file(directory):
+    # List of filenames in priority order
+    priority_files = [
+        "DISKID",
+        "README.TXT",
+        "README.DOC",
+        "READ.ME",
+        "Notes.*"
+    ]
+
+    directory_path = Path(directory)
+
+    # Iterate over priority files
+    for priority_file in priority_files:
+        # Use rglob for both exact and wildcard pattern matches
+        for file in directory_path.rglob(priority_file):
+            return file
+
+    return None
 
 # Function to recursively delete empty directories
 def delete_empty_dirs(dir_path):
@@ -30,46 +84,95 @@ def delete_empty_dirs(dir_path):
                 # Directory is not empty, skip it
                 pass
 
+def strip_high_bit(text):
+    # Strip the 8th bit by bitwise AND with 0x7F (0111 1111)
+    return ''.join(chr(ord(char) & 0x7F) for char in text)
 
 # zips all the contents of a directory except for .jpg files
 # Modified function to delete empty directories
-def zip_directory_except_jpgs(src_dir):
+def zip_directory_except_jpgs(folder_dict, src_dir):
+
     # Generate ZIP file name based on parent folder name
-    parent_folder_name = os.path.basename(src_dir)
-    zip_file_name = os.path.join(src_dir, f"{parent_folder_name}.zip")
+    parent_folder = Path(src_dir)
+    zip_file_name = os.path.join(src_dir, f"{parent_folder.name}.zip")
+    debug_print(folder_dict, "Creating zipfile: {} from source dir: {}".format(zip_file_name, str(src_dir)))            
     
     files_to_delete = []
+    folder_dict['zip_contents'] = []
+
+    desc_file = find_description_file(src_dir)
+    if desc_file:
+        folder_dict['description_file'] = desc_file
+
+        with open(desc_file, 'r', encoding='latin1') as f:
+            original_text = f.read() 
+        folder_dict['description_file_contents'] = strip_high_bit(original_text)
+
+        folder_dict['description_file_name'] = desc_file.name
+        folder_dict['description_file_path'] = str(desc_file)
     
     # Initialize ZipFile object
     with zipfile.ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(src_dir):
             for file in files:
-                file_path = os.path.join(root, file)
+                #file_path = os.path.join(root, file)
+                file_path = Path(root).joinpath(file)
                 
-                # Skip .jpg files at the root level and the ZIP file itself
-                if (root == src_dir and file.endswith('.jpg')) or file_path == zip_file_name:
+                # Skip .jpg files at the root level, hidden files, and the ZIP file itself
+                debug_print(folder_dict, "zip test root: {} src_dir: {}".format(root, src_dir))
+                debug_print(folder_dict, "zip test root==src: {} .suffix in: {}".format(str(root) == str(src_dir), file_path.suffix in IMG_SUFFIXES))
+                if (str(root) == str(src_dir) and file_path.suffix in IMG_SUFFIXES) \
+                    or file.startswith('.') \
+                    or file_path.samefile(zip_file_name):
                     continue
-                
-                zipf.write(file_path, os.path.relpath(file_path, src_dir))
+                debug_print(folder_dict, "zipping file: {}".format(file))
+
+                #build metadata about each file
+                file_meta = {}
+                file_meta['file_path']=file_path.relative_to(parent_folder)       
+                file_meta['md5sum'] = md5(file_path)
+                file_meta['suffix'] = file_path.suffix
+                file_meta['size'] = file_path.stat().st_size
+                if file_path.suffix == '.a2r':
+                    #read meta data out of the A2r
+                    a2r_data = a2r_reader.read_a2r_file(file_path)
+                    file_meta["a2r_data"] = a2r_data
+                folder_dict['zip_contents'].append(file_meta)
+                debug_print(folder_dict, "Adding {} to zip with path {}".format(file_path, file_path.relative_to(src_dir)))
+                zipf.write(file_path, file_path.relative_to(src_dir))
                 
                 # Add file to delete list
                 files_to_delete.append(file_path)
     
     # Delete the files added to the ZIP
     for file_path in files_to_delete:
-        os.remove(file_path)
+        file_path.unlink()
         
     # Delete empty directories
     delete_empty_dirs(src_dir)
     
     return zip_file_name
 
-def insert_into_db(sorted_output):
-    for path, folder in sorted_output:
-        print('Inserting into disk_db: ' + folder['identifier'] + ' ' + folder['folder_name'])
-        print('Folder' + str(folder))
+def insert_into_db(folder_list, sorted_output):
+    importRunCreated = False
+    for folder in folder_list:
+        debug_print(folder, "Inserting into disk_db identifier: {} folder_name{}".format(
+            folder['identifier'], folder['folder_name']))
+        debug_print(folder, "Folder {}".format(str(folder)))
+        if importRunCreated == False:
+            importRun = ImportRun(
+                text = folder['debug_text'],
+                parentPath = folder['parent_path']
+            )
+            importRun.save()
+        if 'description_file_contents' in folder:
+            mydescription = folder['description_file_contents']
+        else:
+            mydescription = None
+
         entry = Entry(
             identifier = folder['identifier'],
+            fullArchivePath = "https://archive.org/details/{}".format(folder['identifier']),
             folder = folder['folder_path'],
             title = folder['folder_name'],
             uploaded = False,
@@ -78,7 +181,10 @@ def insert_into_db(sorted_output):
             hasFileContents = folder['hasFileContents'],
             mediatype = 'SW',
             hasDiskImg = folder['hasDiskImgFile'],
+            importRun = importRun,
+            description = mydescription
         )
+
         entry.save()
 
         #handling zip archives
@@ -88,26 +194,84 @@ def insert_into_db(sorted_output):
             zipfile, created = ZipArchive.objects.get_or_create(archive=name)
             entry.zipArchives.add(zipfile)
 
+        for file in folder['zip_contents']:
+            zipContent, created = ZipContent.objects.get_or_create(
+                file=file["file_path"],
+                zipArchive = zipfile,
+                md5sum = file["md5sum"],
+                suffix = file["suffix"],
+                size_bytes = file["size"],
+                )
+            zipContent.save()
+
+            #handle a2r meta data
+            if file["suffix"] == ".a2r":
+                a2r_data = file['a2r_data']
+                infoChunk, created = InfoChunk.objects.get_or_create(
+                    info_version = a2r_data["INFO"]["info_version"],
+                    creator = a2r_data["INFO"]["creator"],
+                    drive_type = a2r_data["INFO"]["drive_type"],
+                    write_protected = a2r_data["INFO"]["write_protected"],
+                    synchronized = a2r_data["INFO"]["synchronized"],
+                    hard_sector_count = a2r_data["INFO"]["hard_sector_count"],
+                ) 
+                infoChunk.save()
+                metaChunk, created = MetaChunk.objects.get_or_create(
+                    title = a2r_data["META"].get("title"),
+                    subtitle = a2r_data["META"].get("subtitle"),
+                    publisher = a2r_data["META"].get("publisher"),
+                    developer = a2r_data["META"].get("developer"),
+                    copyright = a2r_data["META"].get("copyright"),
+                    version = a2r_data["META"].get("version"),
+                    language = MetaChunk.get_language_abbr(a2r_data["META"].get("language")),
+                    requires_platform = a2r_data["META"].get("requires_platform"),
+                    requires_machine = a2r_data["META"].get("requires_machine"),
+                    requires_ram = a2r_data["META"].get("requires_ram"),
+                    notes = a2r_data["META"].get("notes"),
+                    side = a2r_data["META"].get("side"),
+                    side_name = a2r_data["META"].get("side_name"),
+                    contributor = a2r_data["META"].get("contributor"),
+                    image_date = a2r_data["META"].get("image_date"),
+                    )
+                metaChunk.save()
+                fluxFile, created = FluxFile.objects.get_or_create(
+                        file=file["file_path"],
+                        zipContent = zipContent,
+                        info = infoChunk,
+                        meta = metaChunk,
+                )
+                fluxFile.save()
+                entry.fluxFiles.add(fluxFile)
+                debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
+                publisher = a2r_data["META"].get("publisher")
+                
+                if publisher:
+                    contributor, created = Contributor.objects.get_or_create(name=publisher)
+                    entry.contributors.add(contributor)
+                    
+                developer = a2r_data["META"].get("developer")
+                if developer:
+                    creator, created = Creator.objects.get_or_create(name=developer)
+                    entry.creators.add(creator)    
+                debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
+
+            if file["suffix"] == ".flux":
+                fluxFile, created = FluxFile.objects.get_or_create(
+                    file=file["file_path"],
+                    zipContent = zipContent,
+                    info = None,
+                    meta = None,
+                )
+                fluxFile.save()
+                entry.fluxFiles.add(fluxFile)
+                debug_print(folder, "fluxfile: {}".format(file, fluxFile))
+           
         #handling images
         if isinstance(folder['front_jpg_files'], str):
             folder['front_jpg_files'] = [folder['front_jpg_files']]
         for name in folder['front_jpg_files']:
             photo, created = PhotoImage.objects.get_or_create(image=name)
             entry.photos.add(photo)
-
-        #handling flux files
-        if isinstance(folder['flux_files'], str):
-            folder['flux_files'] = [folder['flux_files']]
-        for name in folder['flux_files']:
-            file, created = FluxFile.objects.get_or_create(file=name)
-            entry.fluxFiles.add(file)
-
-        if isinstance(folder['other_files'], str):
-            folder['other_files'] = [folder['other_files']]
-        for name in folder['other_files']:
-            print("Adding " + name + " to randoFiles")
-            file, created = RandoFile.objects.get_or_create(file=name)
-            entry.randoFiles.add(file)
 
         # Handling collections
         collection_names = ['open_source_software']
@@ -131,9 +295,10 @@ def insert_into_db(sorted_output):
             subject_names = subject_names.split(";")
         for name in subject_names:
             subject, created = Subject.objects.get_or_create(name=name)
-            entry.subjects.add(subject)
+            entry.subjects.add(subject)            
        
         entry.save()
+    
 
 def isRecent(file_path):
     last_modified_time = os.path.getmtime(file_path)
@@ -171,88 +336,110 @@ def get_files_from_dir(parent_path):
 
     return file_list
 
-def build_file_list(parent_path):
-    # Dictionary to hold folder last modified time and file list
-    folder_dict = {}
-    
+def extract_filetypes_from_dir(folder_dict, file_list):
+         
+    debug_print(folder_dict, file_list) 
+
+    for f in file_list:
+        path = Path(f)
+        filename = path.name
+        muster_path = str(path)
+        
+        debug_print(folder_dict, "Adding muster:" + str(muster_path) + " filename:" + str(filename))
+        #create segmented file list
+        if path.suffix == '.zip':
+            folder_dict["zip_files"].append(muster_path)
+        debug_print(folder_dict,"path.suffix: {} path.parent: {}".format(path.suffix, path.parent))
+        if path.suffix in IMG_SUFFIXES and "Mustering" in str(path.parent):
+            folder_dict["front_jpg_files"].append(muster_path)
+        if (path.suffix == '.flux' or path.suffix == '.a2r'):
+            folder_dict["flux_files"].append(muster_path)
+            folder_dict["hasFluxFile"] = True
+        if path.suffix == '.img':
+            folder_dict["disk_img_files"].append(muster_path)
+            folder_dict["hasDiskImgFile"] = True
+        if path.is_dir():
+            debug_print(folder_dict,"Adding sub_folder " + muster_path + " to sub_folders")
+            folder_dict["sub_folders"].append(muster_path)
+            folder_dict["hasFileContents"] = True
+        extensions = [".zip", ".flux", ".a2r", ".img"] + IMG_SUFFIXES
+        exclude_ext = tuple(extensions) 
+        if not f.endswith(exclude_ext):
+            folder_dict["other_files"].append(muster_path)
+        
+def build_file_list(folder_list, parent_path):
+
+    tag_name = "Yellow"
+
+    #returns a list of folders that are tagged yellow in the macos finder
+    files_with_tag = get_files_with_tag_in_folder(tag_name, parent_path)
+
     # Iterate through each folder in the parent directory
-    for folder_name in os.listdir(parent_path):
-        folder_path = os.path.join(parent_path, folder_name)
+    for folder_name in files_with_tag:
+        # Dictionary to hold folder last modified time and file list
+        folder_dict = {
+            "parent_path": parent_path,
+            "zip_files": [],
+            "front_jpg_files": [],
+            "flux_files": [],
+            "disk_img_files": [],
+            "sub_folders": [],
+            "exclude_ext": [],
+            "other_files": [],
+            "hasFluxFile": False,
+            "hasFileContents": False,
+            "hasDiskImgFile": False,
+            "debug_text": "",
+        }
+
+        folder_path = Path(parent_path).joinpath(folder_name)
+        mustering_folder = os.path.join(DISK_MUSTERING_DIR, folder_name)
         
         # Skip files and only focus on sub-directories
         if not os.path.isdir(folder_path):
             continue
-        if not isRecent(folder_path):
-            continue
         
         # Get last modified time for the folder
-        last_modified_time = os.path.getmtime(folder_path)
-        
-        file_list = get_files_from_dir(folder_path)      
-        print(file_list)  
-        
-        # Sort file list based on criteria
-        zip_files = sorted([f for f in file_list if f.endswith('.zip')])
-        front_jpg_files = sorted([f for f in file_list if f.endswith('.jpg')])
-        flux_files = sorted([f for f in file_list if (f.endswith('.flux') or f.endswith('.a2r'))])
-        disk_img_files = sorted([f for f in file_list if f.endswith('.img')])
-        sub_folders = sorted([f for f in file_list if os.path.isdir(folder_path)])
-        exclude_ext = tuple([".zip", ".jpg", ".flux", ".a2r", ".img" ])
-        other_files = sorted([f for f in file_list if not f.endswith(exclude_ext)])
+        last_modified_time = os.path.getmtime(folder_path) 
 
-        if len(flux_files) > 0:
-            hasFluxFile = True
-        else:
-            hasFluxFile = False
-
-        if len(sub_folders) > 0:
-            hasFileContents = True
-        else:
-            hasFileContents = False
-
-        if len(disk_img_files) > 0:
-            hasDiskImgFile = True
-        else:
-            hasDiskImgFile = False
-        
         #create the zip file for everything but the jpg's
-        zip_filename = zip_directory_except_jpgs(folder_path)
+        zip_filename = zip_directory_except_jpgs(folder_dict, folder_path)
 
-        #build identifier
-        identifier = sanitize_string(folder_name)
+        file_list = get_files_from_dir(folder_path) 
+        extract_filetypes_from_dir(folder_dict, file_list)
 
-        # Store in dictionary
-        folder_dict[folder_path] = {'identifier': identifier,
-                                    'folder_name': folder_name,
-                                    'folder_path': folder_path,
-                                    'last_modified': last_modified_time, 
-                                    'zip_filename': zip_filename,
-                                    'zip_files': zip_files,
-                                    'front_jpg_files': front_jpg_files,
-                                    'flux_files': flux_files,
-                                    'disk_img_files': disk_img_files,
-                                    'sub_folders': sub_folders,
-                                    'other_files': other_files,
-                                    'hasFluxFile': hasFluxFile,
-                                    'hasFileContents': hasFileContents,
-                                    'hasDiskImgFile': hasDiskImgFile}
+        with zipfile.ZipFile(zip_filename, 'r') as zipf:
+            zip_contents = zipf.namelist()
+        extract_filetypes_from_dir(folder_dict, zip_contents)
+
+        folder_dict["folder_name"] = folder_path.name
+        folder_dict["folder_path"] = str(folder_path)
+        folder_dict["zip_filename"] = zip_filename
+        folder_dict["identifier"] = sanitize_string(folder_path.name)
+        debug_print(folder_dict, folder_dict)
+        folder_list.append(folder_dict)
+
+        debug_print(folder_dict, "build_file_list() finished '{}', {} folders processed".format(folder_name, len(folder_list)))
         
-    # Sort folders by last modified time
-    sorted_folders = sorted(folder_dict.items(), key=lambda x: x[1]['last_modified'])
-    print("Found " + str(len(sorted_folders)) + " files.")
-    return sorted_folders
+    debug_print(folder_dict, "Done build_file_list() {} folders processed".format(len(folder_list)))
+
 
 # Main function remains the same
 def main():
-    parser = argparse.ArgumentParser(description='Createa a .csv with a list of files to upload to archive.org')
-    parser.add_argument('src_dir', type=str, help='The source directory to create an upload list for')
+    parser = argparse.ArgumentParser(description='Iterates through a local folder and extracts internet archive meta data for django.')
+    parser.add_argument('src_dir', type=str, help='Looks in the source directory for folders tagged Yellow in Macos')
     args = parser.parse_args()
     parent_path = args.src_dir
-    print("Reading folder contents from " + parent_path + " into disk database.")
+    print("Reading folder contents from " + parent_path + " with a Yellow finder tag into disk database.")
 
     # Generate the sorted output
-    sorted_output = build_file_list(parent_path)
-    insert_into_db(sorted_output)
+    folder_list = []
+    build_file_list(folder_list, parent_path)
+    print("zip_files: {}".format(folder_list[0]["zip_files"]))
+    print("front_jpg_files: {}".format(folder_list[0]["front_jpg_files"]))
+    print("flux_files: {}".format(folder_list[0]["flux_files"]))
+    print("disk_img_files: {}".format(folder_list[0].get("disk_img_files")))
+    insert_into_db(folder_list, parent_path)
 
     # Sample usage (Note: Replace with actual path for real use)
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

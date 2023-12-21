@@ -14,52 +14,65 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-class Creator(models.Model):
+class Creator(BaseModel ):
     name = models.CharField(max_length=500)
     def __str__(self):
         return self.name
 
-class ArchCollection(models.Model):
+class ArchCollection(BaseModel):
     name = models.CharField(max_length=500)
     def __str__(self):
         return self.name
 
-class Contributor(models.Model):
+class Contributor(BaseModel):
     name = models.CharField(max_length=100)
     def __str__(self):
         return self.name
 
-class FluxFile(models.Model):
+class FluxFile(BaseModel):
     file = models.CharField(max_length=2048)
+    zipContent = models.ForeignKey('ZipContent', related_name='fluxes', on_delete=models.CASCADE, blank=True, null=True)
+    info = models.ForeignKey('InfoChunk', on_delete=models.CASCADE, blank=True, null=True)
+    meta = models.ForeignKey('MetaChunk', on_delete=models.CASCADE, blank=True, null=True)
     def __str__(self):
         return self.file
 
-class Language(models.Model):
+class Language(BaseModel):
     name = models.CharField(max_length=100)
     def __str__(self):
         return self.name
 
-class PhotoImage(models.Model):
+class PhotoImage(BaseModel):
     image = models.CharField(max_length=2048)
     def __str__(self):
         return self.image
 
-class RandoFile(models.Model):
+class RandoFile(BaseModel):
     file = models.CharField(max_length=2048)
+    zipContent = models.ForeignKey('ZipContent', related_name='randos', on_delete=models.CASCADE, blank=True, null=True)
     def __str__(self):
         return self.file
 
-class Subject(models.Model):
+class Subject(BaseModel):
     name = models.CharField(max_length=500)
     def __str__(self):
         return self.name
       
-class ZipArchive(models.Model):
+class ZipArchive(BaseModel):
     archive = models.CharField(max_length=2048)
     def __str__(self):
         return self.archive
 
-class Entry(models.Model):
+class ZipContent(BaseModel):
+    zipArchive = models.ForeignKey('ZipArchive', related_name='contents', on_delete=models.CASCADE, blank=True, null=True)
+    file = models.CharField(max_length=2048)
+    md5sum = models.CharField(max_length=32, blank=True, null=True)
+    suffix = models.CharField(max_length=20, blank=True, null=True)
+    size_bytes = models.BigIntegerField(blank=True, null=True)
+    def __str__(self):
+        return self.file
+
+class Entry(BaseModel):
     class Mediatypes(models.TextChoices):
         TEXTS = "TX", _("Texts")
         ETREE = "ET", _("Etree")
@@ -116,8 +129,128 @@ class Entry(models.Model):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
+    importRun = models.ForeignKey('ImportRun', on_delete=models.SET_NULL, blank=True, null=True)
+    
     def get_absolute_url(self):
         return reverse("floppies:entry-update", kwargs={"pk": self.pk})
 
+    def get_media_files(self):
+        """
+        Returns a list of file paths for the media files (zip archives and photos) related to this entry.
+        """
+        media_files = []
+
+        # Add file paths from zip archives
+        for zip_archive in self.zipArchives.all():
+            media_files.append(zip_archive.archive)
+
+        # Add file paths from photos
+        for photo in self.photos.all():
+            media_files.append(photo.image)
+
+        return media_files
+
     def __str__(self):
         return self.title
+
+class ImportRun(BaseModel):
+    text = models.TextField(blank=False)
+    rumtime = models.DateTimeField(auto_now_add=True)
+    parentPath = models.CharField(max_length=2048, blank=True, null=True)
+    def __str__(self):
+        return self.parentPath + " " + self.rumtime.strftime("%Y-%m-%d %H:%M:%S")
+
+class InfoChunk(BaseModel):
+    # INFO Version (1 byte)
+    info_version = models.PositiveSmallIntegerField()
+
+    # Creator (32 bytes string, UTF-8 encoded)
+    creator = models.CharField(max_length=32)
+
+    # Drive Type (1 byte, mapped to choices)
+    DRIVE_TYPE_CHOICES = [
+        (1, "5.25″ SS 40trk 0.25 step"),
+        (2, "3.5″ DS 80trk Apple CLV"),
+        (3, "5.25″ DS 80trk"),
+        (4, "5.25″ DS 40trk"),
+        (5, "3.5″ DS 80trk"),
+        (6, "8″ DS"),
+        (7, "3″ DS 80trk"),
+        (8, "3″ DS 40trk"),
+    ]
+    drive_type = models.PositiveSmallIntegerField(choices=DRIVE_TYPE_CHOICES)
+
+    # Write Protected (1 byte, boolean)
+    write_protected = models.BooleanField()
+
+    # Synchronized (1 byte, boolean)
+    synchronized = models.BooleanField()
+
+    # Hard Sector Count (1 byte)
+    hard_sector_count = models.PositiveSmallIntegerField()
+
+    def __str__(self):
+        return f"{self.creator} (Version: {self.info_version})"
+
+class MetaChunk(BaseModel):
+    title = models.CharField(max_length=255, blank=True)
+    subtitle = models.CharField(max_length=255, blank=True, null=True)
+    publisher = models.CharField(max_length=255, blank=True, null=True)
+    developer = models.CharField(max_length=255, blank=True, null=True)
+    copyright = models.CharField(max_length=255, blank=True, null=True)
+    version = models.CharField(max_length=255, blank=True, null=True)
+
+    # Language choices
+    LANGUAGES = [
+        ('en', 'English'), ('es', 'Spanish'), ('fr', 'French'), ('de', 'German'),
+        ('zh', 'Chinese'), ('ja', 'Japanese'), ('it', 'Italian'), ('nl', 'Dutch'),
+        ('pt', 'Portuguese'), ('da', 'Danish'), ('fi', 'Finnish'), ('no', 'Norwegian'),
+        ('sv', 'Swedish'), ('ru', 'Russian'), ('pl', 'Polish'), ('tr', 'Turkish'),
+        ('ar', 'Arabic'), ('th', 'Thai'), ('cs', 'Czech'), ('hu', 'Hungarian'),
+        ('ca', 'Catalan'), ('hr', 'Croatian'), ('el', 'Greek'), ('he', 'Hebrew'),
+        ('ro', 'Romanian'), ('sk', 'Slovak'), ('uk', 'Ukrainian'), ('id', 'Indonesian'),
+        ('ms', 'Malay'), ('vi', 'Vietnamese'),
+        ('zz', 'Other'),
+    ]
+
+    language = models.CharField(max_length=2, choices=LANGUAGES, blank=True, null=True)
+
+    requires_platform = models.CharField(max_length=255, blank=True, null=True)
+    requires_machine = models.CharField(max_length=255, blank=True, null=True)
+    requires_ram = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    side = models.CharField(max_length=255, blank=True, null=True)
+    side_name = models.CharField(max_length=255, blank=True, null=True)
+    contributor = models.CharField(max_length=255, blank=True, null=True)
+
+    # ISO8601 date
+    image_date = models.DateTimeField(blank=True, null=True)
+
+    @classmethod
+    def get_language_abbr(cls, language_name):
+        """
+        Returns the two-letter abbreviation for a given language name.
+        If the language is not found, returns None.
+        """
+        for abbr, name in cls.LANGUAGES:
+            if name.lower() == language_name.lower():
+                return abbr
+        return None
+
+    @classmethod
+    def get_language_from_abbr(cls, language_abbr):
+        """
+        Returns the two-letter abbreviation for a given language name.
+        If the language is not found, returns None.
+        """
+        for abbr, name in cls.LANGUAGES:
+            if abbr.lower() == language_abbr.lower():
+                return name
+        return None
+
+    def __str__(self):
+        return self.title if self.title else "Unnamed Meta Chunk"
+
+    class Meta:
+        verbose_name = "Meta Chunk"
+        verbose_name_plural = "Meta Chunks"
