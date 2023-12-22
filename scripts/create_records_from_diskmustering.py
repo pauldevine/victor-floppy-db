@@ -86,7 +86,10 @@ def delete_empty_dirs(dir_path):
 
 def strip_high_bit(text):
     # Strip the 8th bit by bitwise AND with 0x7F (0111 1111)
-    return ''.join(chr(ord(char) & 0x7F) for char in text)
+    newText = ''.join(chr(ord(char) & 0x7F) for char in text)
+    newText = bytes(newText, 'utf-8').decode('utf-8', 'replace')
+    newText = newText.replace("\x00", "\uFFFD") 
+    return newText
 
 # zips all the contents of a directory except for .jpg files
 # Modified function to delete empty directories
