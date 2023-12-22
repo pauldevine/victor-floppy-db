@@ -40,6 +40,7 @@ def upload_entry_to_internet_archive(entry):
 
     # Update the uploaded flag in your Django model
     entry.uploaded = True
+    entry.needsWork = False
     entry.save()
 
 def upload_new_entries():
