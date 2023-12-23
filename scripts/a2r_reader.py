@@ -55,39 +55,46 @@ def read_a2r_file(filename):
         "META": None
     }
     with open(filename, 'rb') as data_stream:
-        # Skip the initial 8-byte header
-        file_header = data_stream.read(8)
+        return read_a2r_datastream(data_stream)
 
-        while True:
-            # Read the next chunk header
-            header = data_stream.read(8)
-            if len(header) < 8:
-                break  # End of file or incomplete chunk
+def read_a2r_datastream(data_stream):
+    a2r_data = {
+        "INFO": None,
+        "META": None
+    }
+    # Skip the initial 8-byte header
+    file_header = data_stream.read(8)
 
-            chunk_id, chunk_size = struct.unpack("<4sI", header)
-            if DEBUG:
-                print("Chunk ID: {}, Chunk Size: {}".format(chunk_id, chunk_size))
+    while True:
+        # Read the next chunk header
+        header = data_stream.read(8)
+        if len(header) < 8:
+            break  # End of file or incomplete chunk
 
-            # Ensure to read or skip the entire chunk to align for the next chunk
-            if chunk_id == b'INFO':
-                # Read the INFO chunk data and parse it
-                info_data = data_stream.read(chunk_size)
-                a2r_data["INFO"] = parse_a2r_info_chunk(info_data)
-            elif chunk_id == b'RWCP':
-                # Process RWCP chunk
-                rwcp_data = data_stream.read(chunk_size)
-                # ... (Process rwcp_data)
-            elif chunk_id == b'META':
-                # Read the META chunk data and parse it
-                meta_data = data_stream.read(chunk_size)
-                a2r_data["META"] = parse_a2r_meta_chunk(meta_data)
-            else:
-                # Skip unknown chunks
-                data_stream.seek(chunk_size, 1)
+        chunk_id, chunk_size = struct.unpack("<4sI", header)
+        if DEBUG:
+            print("Chunk ID: {}, Chunk Size: {}".format(chunk_id, chunk_size))
 
-            # Debugging: Show the file position after processing each chunk
-            if DEBUG:
-                print("File position after chunk: {}".format(data_stream.tell()))
+        # Ensure to read or skip the entire chunk to align for the next chunk
+        if chunk_id == b'INFO':
+            # Read the INFO chunk data and parse it
+            info_data = data_stream.read(chunk_size)
+            a2r_data["INFO"] = parse_a2r_info_chunk(info_data)
+        elif chunk_id == b'RWCP':
+            # Process RWCP chunk
+            rwcp_data = data_stream.read(chunk_size)
+            # ... (Process rwcp_data)
+        elif chunk_id == b'META':
+            # Read the META chunk data and parse it
+            meta_data = data_stream.read(chunk_size)
+            a2r_data["META"] = parse_a2r_meta_chunk(meta_data)
+        else:
+            # Skip unknown chunks
+            data_stream.seek(chunk_size, 1)
+
+        # Debugging: Show the file position after processing each chunk
+        if DEBUG:
+            print("File position after chunk: {}".format(data_stream.tell()))
     return a2r_data
 
 if __name__ == "__main__":

@@ -14,9 +14,11 @@ import re
 from datetime import datetime, timedelta
 import argparse
 import zipfile
-import a2r_reader
 import hashlib
 from osxmetadata import OSXMetaData
+
+import a2r_reader
+import zip_contents
 
 sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
@@ -91,71 +93,6 @@ def strip_high_bit(text):
     newText = newText.replace("\x00", "\uFFFD") 
     return newText
 
-# zips all the contents of a directory except for .jpg files
-# Modified function to delete empty directories
-def zip_directory_except_jpgs(folder_dict, src_dir):
-
-    # Generate ZIP file name based on parent folder name
-    parent_folder = Path(src_dir)
-    zip_file_name = os.path.join(src_dir, f"{parent_folder.name}.zip")
-    debug_print(folder_dict, "Creating zipfile: {} from source dir: {}".format(zip_file_name, str(src_dir)))            
-    
-    files_to_delete = []
-    folder_dict['zip_contents'] = []
-
-    desc_file = find_description_file(src_dir)
-    if desc_file:
-        folder_dict['description_file'] = desc_file
-
-        with open(desc_file, 'r', encoding='latin1') as f:
-            original_text = f.read() 
-        folder_dict['description_file_contents'] = strip_high_bit(original_text)
-
-        folder_dict['description_file_name'] = desc_file.name
-        folder_dict['description_file_path'] = str(desc_file)
-    
-    # Initialize ZipFile object
-    with zipfile.ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, _, files in os.walk(src_dir):
-            for file in files:
-                #file_path = os.path.join(root, file)
-                file_path = Path(root).joinpath(file)
-                
-                # Skip .jpg files at the root level, hidden files, and the ZIP file itself
-                debug_print(folder_dict, "zip test root: {} src_dir: {}".format(root, src_dir))
-                debug_print(folder_dict, "zip test root==src: {} .suffix in: {}".format(str(root) == str(src_dir), file_path.suffix in IMG_SUFFIXES))
-                if (str(root) == str(src_dir) and file_path.suffix in IMG_SUFFIXES) \
-                    or file.startswith('.') \
-                    or file_path.samefile(zip_file_name):
-                    continue
-                debug_print(folder_dict, "zipping file: {}".format(file))
-
-                #build metadata about each file
-                file_meta = {}
-                file_meta['file_path']=file_path.relative_to(parent_folder)       
-                file_meta['md5sum'] = md5(file_path)
-                file_meta['suffix'] = file_path.suffix
-                file_meta['size'] = file_path.stat().st_size
-                if file_path.suffix == '.a2r':
-                    #read meta data out of the A2r
-                    a2r_data = a2r_reader.read_a2r_file(file_path)
-                    file_meta["a2r_data"] = a2r_data
-                folder_dict['zip_contents'].append(file_meta)
-                debug_print(folder_dict, "Adding {} to zip with path {}".format(file_path, file_path.relative_to(src_dir)))
-                zipf.write(file_path, file_path.relative_to(src_dir))
-                
-                # Add file to delete list
-                files_to_delete.append(file_path)
-    
-    # Delete the files added to the ZIP
-    for file_path in files_to_delete:
-        file_path.unlink()
-        
-    # Delete empty directories
-    delete_empty_dirs(src_dir)
-    
-    return zip_file_name
-
 def insert_into_db(folder_list, sorted_output):
     importRunCreated = False
     for folder in folder_list:
@@ -191,83 +128,86 @@ def insert_into_db(folder_list, sorted_output):
         entry.save()
 
         #handling zip archives
-        if isinstance(folder['zip_filename'], str):
-            folder['zip_filename'] = [folder['zip_filename']]
-        for name in folder['zip_filename']:
-            zipfile, created = ZipArchive.objects.get_or_create(archive=name)
-            entry.zipArchives.add(zipfile)
-
-        for file in folder['zip_contents']:
-            zipContent, created = ZipContent.objects.get_or_create(
-                file=file["file_path"],
-                zipArchive = zipfile,
-                md5sum = file["md5sum"],
-                suffix = file["suffix"],
-                size_bytes = file["size"],
-                )
-            zipContent.save()
-
-            #handle a2r meta data
-            if file["suffix"] == ".a2r":
-                a2r_data = file['a2r_data']
-                infoChunk, created = InfoChunk.objects.get_or_create(
-                    info_version = a2r_data["INFO"]["info_version"],
-                    creator = a2r_data["INFO"]["creator"],
-                    drive_type = a2r_data["INFO"]["drive_type"],
-                    write_protected = a2r_data["INFO"]["write_protected"],
-                    synchronized = a2r_data["INFO"]["synchronized"],
-                    hard_sector_count = a2r_data["INFO"]["hard_sector_count"],
-                ) 
-                infoChunk.save()
-                metaChunk, created = MetaChunk.objects.get_or_create(
-                    title = a2r_data["META"].get("title"),
-                    subtitle = a2r_data["META"].get("subtitle"),
-                    publisher = a2r_data["META"].get("publisher"),
-                    developer = a2r_data["META"].get("developer"),
-                    copyright = a2r_data["META"].get("copyright"),
-                    version = a2r_data["META"].get("version"),
-                    language = MetaChunk.get_language_abbr(a2r_data["META"].get("language")),
-                    requires_platform = a2r_data["META"].get("requires_platform"),
-                    requires_machine = a2r_data["META"].get("requires_machine"),
-                    requires_ram = a2r_data["META"].get("requires_ram"),
-                    notes = a2r_data["META"].get("notes"),
-                    side = a2r_data["META"].get("side"),
-                    side_name = a2r_data["META"].get("side_name"),
-                    contributor = a2r_data["META"].get("contributor"),
-                    image_date = a2r_data["META"].get("image_date"),
-                    )
-                metaChunk.save()
-                fluxFile, created = FluxFile.objects.get_or_create(
+        for sub_folder, folder_contents in folder["zip_contents"].items():
+            zip_files = folder_contents['zip_files']
+            for zip_file, zip_dict in zip_files.items():
+                zipfile, created = ZipArchive.objects.get_or_create(archive=str(zip_file))
+                entry.zipArchives.add(zipfile)
+                zipfile.save()
+                debug_print(folder, " zipfile: {} zip_dict: {}".format(zipfile, zip_dict))
+                #handle zip file contents
+                for file in zip_dict["zip_details"]:
+                    debug_print(folder, ("   {}".format(file)))
+                    zipContent, created = ZipContent.objects.get_or_create(
                         file=file["file_path"],
-                        zipContent = zipContent,
-                        info = infoChunk,
-                        meta = metaChunk,
-                )
-                fluxFile.save()
-                entry.fluxFiles.add(fluxFile)
-                debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
-                publisher = a2r_data["META"].get("publisher")
-                
-                if publisher:
-                    contributor, created = Contributor.objects.get_or_create(name=publisher)
-                    entry.contributors.add(contributor)
-                    
-                developer = a2r_data["META"].get("developer")
-                if developer:
-                    creator, created = Creator.objects.get_or_create(name=developer)
-                    entry.creators.add(creator)    
-                debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
+                        zipArchive = zipfile,
+                        md5sum = file["md5sum"],
+                        suffix = file["suffix"],
+                        size_bytes = file["size"],
+                        )
+                    zipContent.save()
 
-            if file["suffix"] == ".flux":
-                fluxFile, created = FluxFile.objects.get_or_create(
-                    file=file["file_path"],
-                    zipContent = zipContent,
-                    info = None,
-                    meta = None,
-                )
-                fluxFile.save()
-                entry.fluxFiles.add(fluxFile)
-                debug_print(folder, "fluxfile: {}".format(file, fluxFile))
+                    #handle a2r meta data
+                    if file["suffix"] == ".a2r":
+                        a2r_data = file['a2r_data']
+                        infoChunk, created = InfoChunk.objects.get_or_create(
+                            info_version = a2r_data["INFO"]["info_version"],
+                            creator = a2r_data["INFO"]["creator"],
+                            drive_type = a2r_data["INFO"]["drive_type"],
+                            write_protected = a2r_data["INFO"]["write_protected"],
+                            synchronized = a2r_data["INFO"]["synchronized"],
+                            hard_sector_count = a2r_data["INFO"]["hard_sector_count"],
+                        ) 
+                        infoChunk.save()
+                        metaChunk, created = MetaChunk.objects.get_or_create(
+                            title = a2r_data["META"].get("title"),
+                            subtitle = a2r_data["META"].get("subtitle"),
+                            publisher = a2r_data["META"].get("publisher"),
+                            developer = a2r_data["META"].get("developer"),
+                            copyright = a2r_data["META"].get("copyright"),
+                            version = a2r_data["META"].get("version"),
+                            language = MetaChunk.get_language_abbr(a2r_data["META"].get("language")),
+                            requires_platform = a2r_data["META"].get("requires_platform"),
+                            requires_machine = a2r_data["META"].get("requires_machine"),
+                            requires_ram = a2r_data["META"].get("requires_ram"),
+                            notes = a2r_data["META"].get("notes"),
+                            side = a2r_data["META"].get("side"),
+                            side_name = a2r_data["META"].get("side_name"),
+                            contributor = a2r_data["META"].get("contributor"),
+                            image_date = a2r_data["META"].get("image_date"),
+                            )
+                        metaChunk.save()
+                        fluxFile, created = FluxFile.objects.get_or_create(
+                                file=file["file_path"],
+                                zipContent = zipContent,
+                                info = infoChunk,
+                                meta = metaChunk,
+                        )
+                        fluxFile.save()
+                        entry.fluxFiles.add(fluxFile)
+                        debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
+                        publisher = a2r_data["META"].get("publisher")
+                        
+                        if publisher:
+                            contributor, created = Contributor.objects.get_or_create(name=publisher)
+                            entry.contributors.add(contributor)
+                            
+                        developer = a2r_data["META"].get("developer")
+                        if developer:
+                            creator, created = Creator.objects.get_or_create(name=developer)
+                            entry.creators.add(creator)    
+                        debug_print(folder, "fluxfile: {} a2rdata: {}".format(file, a2r_data))
+
+                    if file["suffix"] == ".flux":
+                        fluxFile, created = FluxFile.objects.get_or_create(
+                            file=file["file_path"],
+                            zipContent = zipContent,
+                            info = None,
+                            meta = None,
+                        )
+                        fluxFile.save()
+                        entry.fluxFiles.add(fluxFile)
+                        debug_print(folder, "fluxfile: {}".format(file, fluxFile))
            
         #handling images
         if isinstance(folder['front_jpg_files'], str):
@@ -369,6 +309,7 @@ def extract_filetypes_from_dir(folder_dict, file_list):
         exclude_ext = tuple(extensions) 
         if not f.endswith(exclude_ext):
             folder_dict["other_files"].append(muster_path)
+            folder_dict["hasFileContents"] = True
         
 def build_file_list(folder_list, parent_path):
 
@@ -405,19 +346,28 @@ def build_file_list(folder_list, parent_path):
         # Get last modified time for the folder
         last_modified_time = os.path.getmtime(folder_path) 
 
-        #create the zip file for everything but the jpg's
-        zip_filename = zip_directory_except_jpgs(folder_dict, folder_path)
-
+        #check if we need to create a zip file for the contents
+        if not zip_contents.has_zip_files(folder_path):
+            debug_print(folder_dict, "Creating zip file for {}".format(folder_path))
+            zip_contents.create_zip_file(folder_path)
+        else:
+            debug_print(folder_dict, "{} has Zip file".format(folder_path))
+        
         file_list = get_files_from_dir(folder_path) 
         extract_filetypes_from_dir(folder_dict, file_list)
+        folder_dict["zip_contents"] = zip_contents.get_zip_metadata(folder_path)
 
-        with zipfile.ZipFile(zip_filename, 'r') as zipf:
-            zip_contents = zipf.namelist()
-        extract_filetypes_from_dir(folder_dict, zip_contents)
+        zip_file_list = []
+        for folder, folder_contents in folder_dict["zip_contents"].items():
+            zip_files = folder_contents['zip_files']
+            for zip_file, zip_dict in zip_files.items():
+                zip_file_list += [d['file_path'] for d in zip_dict["zip_details"] if 'file_path' in d]
 
+
+        print("zip_file_list:{}".format(zip_file_list))
+        extract_filetypes_from_dir(folder_dict, zip_file_list)
         folder_dict["folder_name"] = folder_path.name
         folder_dict["folder_path"] = str(folder_path)
-        folder_dict["zip_filename"] = zip_filename
         folder_dict["identifier"] = sanitize_string(folder_path.name)
         debug_print(folder_dict, folder_dict)
         folder_list.append(folder_dict)
