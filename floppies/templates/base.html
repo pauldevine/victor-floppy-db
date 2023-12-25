@@ -13,6 +13,12 @@
         <a href="/">List</a>
         {% endblock %}
     </div>
+    <div class="list-link">
+        <a href="/?needswork=True">Needs Work</a>
+    </div>
+    <div class="list-link">
+        <a href="/?nextupload=True">Next Upload</a>
+    </div>
     <div class="search-form">
         <form action="{% url 'floppies:search-results' %}" method="get">
             <input name="q" type="text" value="{% firstof request.GET.q%}" placeholder="Search...">

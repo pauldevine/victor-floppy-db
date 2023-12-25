@@ -21,7 +21,14 @@ class IndexView(generic.ListView):
 
     def get_queryset(self):
         """Return the last twenty-five published entries."""
-        return Entry.objects.order_by("-publicationDate")
+        needsWork = self.request.GET.get('needswork')
+        nextUpload = self.request.GET.get('nextupload')
+        queryset = Entry.objects.order_by("-modified_date")
+        if needsWork:
+            queryset = queryset.filter(needsWork=True)
+        if nextUpload:
+            queryset = queryset.filter(needsWork=False, readyToUpload=True, uploaded=False)
+        return queryset
 
 class DetailView(generic.DetailView):
     model = Entry

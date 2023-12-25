@@ -16,6 +16,22 @@ function reorderSelectedOptions(selectId) {
 
         // Clear the select box
         select.innerHTML = '';
+        
+        // Sort the options
+        selectedOptions.sort(function(a,b) {
+            if (a.text.toUpperCase() > b.text.toUpperCase()) return 1;
+            else if (a.text.toUpperCase() < b.text.toUpperCase()) return -1;
+            else return 0;
+        });
+        
+        unselectedOptions.sort(function(a,b) {
+            if (a.text.toUpperCase() > b.text.toUpperCase()) return 1;
+            else if (a.text.toUpperCase() < b.text.toUpperCase()) return -1;
+            else return 0;
+        });
+        
+        
+        
 
         // Add the selected options to the top
         selectedOptions.forEach(function(option) {
@@ -39,4 +55,7 @@ function reorderSelectedOptions(selectId) {
 document.addEventListener('DOMContentLoaded', function() {
     reorderSelectedOptions('id_subjects');
     reorderSelectedOptions('id_creators');
+    reorderSelectedOptions('id_contributors');
+    reorderSelectedOptions('id_collections');
+    reorderSelectedOptions('id_photos');
 });

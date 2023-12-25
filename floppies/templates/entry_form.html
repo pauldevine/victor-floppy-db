@@ -11,12 +11,12 @@
     {{ form.media }}
     <div>
         {{ form.non_field_errors }}
-     <div>
-        {{ form.uploaded.as_field_group }}
-        {{ form.hasFluxFile.as_field_group }}
-        {{ form.hasFileContents.as_field_group }}
-        {{ form.needsWork.as_field_group }}
-        {{ form.readyToUpload.as_field_group }}
+     <div class="topCheckBoxContainer">
+        <div class="topCheckBox">{{ form.uploaded.as_field_group }}</div>
+        <div class="topCheckBox">{{ form.hasFluxFile.as_field_group }}</div>
+        <div class="topCheckBox">{{ form.hasFileContents.as_field_group }}</div>
+        <div class="topCheckBox">{{ form.needsWork.as_field_group }}</div>
+        <div class="topCheckBox">{{ form.readyToUpload.as_field_group }}</div>
     </div>
     <div>
         <div>
