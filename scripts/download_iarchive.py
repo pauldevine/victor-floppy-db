@@ -11,7 +11,7 @@ sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
 
-from floppies.models import Entry, ArchCollection, Contributor, Creator, Language, Subject, Mediatype
+from floppies.models import Entry, ArchCollection, Contributor, Creator, Language, Subject
 
 def save_metadata_to_django(email):
     search_query = f'uploader:{email} AND mediatype:software'
@@ -28,10 +28,13 @@ def save_metadata_to_django(email):
 
         entry = Entry(
             identifier = metadata.get('identifier', ''),
+            fullArchivePath = "https://archive.org/details/{}".format(metadata.get('identifier', '')),
             title = metadata.get('title', ''),
             publicationDate = publicationDate_dt,
             description = metadata.get('description', ''),
-            uploaded = True
+            mediatype = 'SW',
+            uploaded = True,
+            needsWork = False,
         )
         entry.save()
 
@@ -74,14 +77,6 @@ def save_metadata_to_django(email):
         for name in subject_names:
             subject, created = Subject.objects.get_or_create(name=name)
             entry.subjects.add(subject)
-
-        # Handling Mediatype if applicable
-        mediatype_str = metadata.get('mediatype', [])
-        mediatype_key = Mediatype.get_mediatype_key(mediatype_str)
-        if mediatype_key:
-            mediatype, created = Mediatype.objects.get_or_create(mediatype=mediatype_key)
-            entry.mediatype = mediatype
-            entry.save()
 
 print("downloading Internet Arhive data for paul.devine@gmail.com")
 save_metadata_to_django('paul.devine@gmail.com')

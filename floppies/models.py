@@ -30,10 +30,8 @@ class Contributor(BaseModel):
         return self.name
 
 class FluxFile(BaseModel):
+    zipContent = models.OneToOneField('ZipContent', on_delete=models.CASCADE, primary_key=True)
     file = models.CharField(max_length=2048)
-    zipContent = models.ForeignKey('ZipContent', related_name='fluxes', on_delete=models.CASCADE, blank=True, null=True)
-    info = models.ForeignKey('InfoChunk', on_delete=models.CASCADE, blank=True, null=True)
-    meta = models.ForeignKey('MetaChunk', on_delete=models.CASCADE, blank=True, null=True)
     def __str__(self):
         return self.file
 
@@ -43,13 +41,15 @@ class Language(BaseModel):
         return self.name
 
 class PhotoImage(BaseModel):
+    entry = models.ForeignKey('Entry', related_name='photos', on_delete=models.CASCADE, blank=False, null=False)
     image = models.CharField(max_length=2048)
     def __str__(self):
         return self.image
 
 class RandoFile(BaseModel):
     file = models.CharField(max_length=2048)
-    zipContent = models.ForeignKey('ZipContent', related_name='randos', on_delete=models.CASCADE, blank=True, null=True)
+    suffix = models.CharField(max_length=10, blank=True, null=True)
+    entry = models.ForeignKey('Entry', related_name='randos', on_delete=models.CASCADE, blank=False, null=False)
     def __str__(self):
         return self.file
 
@@ -60,11 +60,12 @@ class Subject(BaseModel):
       
 class ZipArchive(BaseModel):
     archive = models.CharField(max_length=2048)
+    entry = models.ForeignKey('Entry', related_name='ziparchives', on_delete=models.CASCADE, blank=False, null=False)
     def __str__(self):
         return self.archive
 
 class ZipContent(BaseModel):
-    zipArchive = models.ForeignKey('ZipArchive', related_name='contents', on_delete=models.CASCADE, blank=True, null=True)
+    zipArchive = models.ForeignKey('ZipArchive', on_delete=models.CASCADE, blank=False, null=False)
     file = models.CharField(max_length=2048)
     md5sum = models.CharField(max_length=32, blank=True, null=True)
     suffix = models.CharField(max_length=20, blank=True, null=True)
@@ -104,7 +105,7 @@ class Entry(BaseModel):
 
 
     identifier = models.CharField(max_length=500)
-    fullArchivePath = models.URLField(max_length=200, blank=True, null=True)
+    fullArchivePath = models.URLField(max_length=600, blank=True, null=True)
     folder = models.CharField(max_length=2048, blank=True, null=True)
     title = models.CharField(max_length=500)
     creators = models.ManyToManyField(Creator, blank=True)
@@ -119,17 +120,12 @@ class Entry(BaseModel):
     languages = models.ManyToManyField(Language, blank=True)
     description = RichTextField(blank=True, null=True)
     subjects = models.ManyToManyField(Subject, blank=True)
-    zipArchives = models.ManyToManyField(ZipArchive, blank=True)
-    photos = models.ManyToManyField(PhotoImage, blank=True)
-    fluxFiles = models.ManyToManyField(FluxFile, blank=True)
-    randoFiles = models.ManyToManyField(RandoFile, blank=True)
     uploaded = models.BooleanField(default=False)
     hasFluxFile = models.BooleanField(default=False)
     hasFileContents = models.BooleanField(default=False)
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
-    importRun = models.ForeignKey('ImportRun', on_delete=models.SET_NULL, blank=True, null=True)
     
     def get_absolute_url(self):
         return reverse("floppies:entry-update", kwargs={"pk": self.pk})
@@ -153,15 +149,19 @@ class Entry(BaseModel):
     def __str__(self):
         return self.title
 
-class ImportRun(BaseModel):
+class ScriptRun(BaseModel):
+    entry = models.ForeignKey('Entry', on_delete=models.CASCADE, blank=False, null=False)
     text = models.TextField(blank=False)
     rumtime = models.DateTimeField(auto_now_add=True)
     parentPath = models.CharField(max_length=2048, blank=True, null=True)
+    function = models.CharField(max_length=512, blank=True, null=True)
+    script = models.CharField(max_length=2048, blank=True, null=True)
     def __str__(self):
         return self.parentPath + " " + self.rumtime.strftime("%Y-%m-%d %H:%M:%S")
 
 class InfoChunk(BaseModel):
     # INFO Version (1 byte)
+    fluxFile = models.OneToOneField('FluxFile', on_delete=models.CASCADE, primary_key=True)
     info_version = models.PositiveSmallIntegerField()
 
     # Creator (32 bytes string, UTF-8 encoded)
@@ -193,6 +193,7 @@ class InfoChunk(BaseModel):
         return f"{self.creator} (Version: {self.info_version})"
 
 class MetaChunk(BaseModel):
+    fluxFile = models.OneToOneField('FluxFile', on_delete=models.CASCADE, primary_key=True)
     title = models.CharField(max_length=255, blank=True)
     subtitle = models.CharField(max_length=255, blank=True, null=True)
     publisher = models.CharField(max_length=255, blank=True, null=True)

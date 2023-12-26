@@ -27,7 +27,7 @@ DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering 
 IMG_SUFFIXES = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
 from floppies.models import Entry, ArchCollection, Contributor, Creator, FluxFile, InfoChunk
-from floppies.models import Language, MetaChunk, Subject, PhotoImage, RandoFile, ZipArchive, ZipContent, ImportRun
+from floppies.models import Language, MetaChunk, Subject, PhotoImage, RandoFile, ZipArchive, ZipContent, ScriptRun
 
 def debug_print(folder_dict, message):
     print(message)
@@ -99,12 +99,7 @@ def insert_into_db(folder_list, sorted_output):
         debug_print(folder, "Inserting into disk_db identifier: {} folder_name{}".format(
             folder['identifier'], folder['folder_name']))
         debug_print(folder, "Folder {}".format(str(folder)))
-        if importRunCreated == False:
-            importRun = ImportRun(
-                text = folder['debug_text'],
-                parentPath = folder['parent_path']
-            )
-            importRun.save()
+
         if 'description_file_contents' in folder:
             mydescription = folder['description_file_contents']
         else:
@@ -126,6 +121,16 @@ def insert_into_db(folder_list, sorted_output):
         )
 
         entry.save()
+
+        if importRunCreated == False:
+            importRun = ScriptRun(
+                entry = entry,
+                text = folder['debug_text'],
+                parentPath = folder['parent_path'],
+                script = "create_records_from_diskmustering.py",
+                function = "insert_into_db",
+            )
+            importRun.save()
 
         #handling zip archives
         for sub_folder, folder_contents in folder["zip_contents"].items():

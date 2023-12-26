@@ -56,8 +56,8 @@ class EntryUpdateView(generic.UpdateView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "photos", "zipArchives", "mediatype", "uploaded", "hasFluxFile", 
-        "hasFileContents", "needsWork", "readyToUpload", "importRun"]
+        "subjects", "mediatype", "uploaded", "hasFluxFile", 
+        "hasFileContents", "needsWork", "readyToUpload"]
     template_name = "entry_form.html"
 
     def get_context_data(self, **kwargs):
@@ -68,21 +68,23 @@ class EntryUpdateView(generic.UpdateView):
         entry = self.object
 
         zip_contents = []
-        for zip_content in ZipContent.objects.filter(zipArchive__in=entry.zipArchives.all()):
-            # Fetch related FluxFile objects for this ZipContent
-            flux_files = list(zip_content.fluxes.all())
+        entry.ziparchives.all()
+        
+        # for zip_content in ZipContent.objects.filter(zipArchive__in=entry.zipArchives.all()):
+        #     # Fetch related FluxFile objects for this ZipContent
+        #     flux_files = list(zip_content.fluxes.all())
 
-            # Create a dictionary to store zip_content and its related objects
-            zip_content_data = {
-                'zip_content': zip_content,
-                'flux_files': flux_files,
-                'info_chunks': [flux_file.info for flux_file in flux_files if flux_file.info],
-                'meta_chunks': [flux_file.meta for flux_file in flux_files if flux_file.meta]
-            }
+        #     # Create a dictionary to store zip_content and its related objects
+        #     zip_content_data = {
+        #         'zip_content': zip_content,
+        #         'flux_files': flux_files,
+        #         'info_chunks': [flux_file.info for flux_file in flux_files if flux_file.info],
+        #         'meta_chunks': [flux_file.meta for flux_file in flux_files if flux_file.meta]
+        #     }
 
-            zip_contents.append(zip_content_data)
+        #     zip_contents.append(zip_content_data)
 
-        context["zip_contents"] = zip_contents
+        # context["zip_contents"] = zip_contents
         return context
 
 
