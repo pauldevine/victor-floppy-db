@@ -19,49 +19,56 @@
         <div class="topCheckBox">{{ form.readyToUpload.as_field_group }}</div>
     </div>
     <div>
-        <div>
-           <div>{{ form.identifier.as_field_group }}</div>
-           <div>{{ form.fullArchivePath.as_field_group }}</div>
-            {{ form.folder.as_field_group }}
-           </div>
-        {{ form.title.as_field_group }}
+        <div class="middleComponent">
+           <div class="form-group">{{ form.identifier.as_field_group }}</div>
+           <div class="form-group">{{ form.fullArchivePath.as_field_group }}</div>
+       </div>
+       <div class="middleComponent">
+           <div class="form-group">{{ form.folder.as_field_group }}</div>
+           <div class="form-group">{{ form.title.as_field_group }}</div>
+        </div>
         <div class="textMainEdit">{{ form.description.as_field_group }}</div>
-        {{ form.creators.as_field_group }}
-        {{ form.subjects.as_field_group }}
-        {{ form.contributors.as_field_group }}
+        <div class="middleComponent">
+            <div class="form-group">
+                {{ form.creators.as_field_group }}
+            </div>
+        </div>
+        <div class="middleComponent">
+            <div class="form-group">{{ form.subjects.as_field_group }}</div>
+            <div class="form-group">{{ form.contributors.as_field_group }}</div>
+        </div>
         {{ form.date.as_field_group }}
-        {{ form.collections.as_field_group }}
-        {{ form.mediatype.as_field_group }}
-    
-        {{ form.languages.as_field_group }}
-        {{ form.zipArchive.as_field_group }}
-
-        <h2>Contents of {{ form.zipArchives.archive }}</h2>
-            {% for item in zip_contents %}
-                <li>{{ item.zip_content.file }} (MD5: {{ item.zip_content.md5sum }})
-                    <ul>
-                        {% for flux_file in item.flux_files %}
-                            <li>Flux File: {{ flux_file.file }}
-                                {% if flux_file.info %}
-                                    <ul>
-                                        <li>InfoChunk: {{ flux_file.info }}</li>
-                                    </ul>
-                                {% endif %}
-                                {% if flux_file.meta %}
-                                    <ul>
-                                        <li>MetaChunk: {{ flux_file.meta }}</li>
-                                        <li>Publisher: {{ flux_file.meta.publisher }}</li>
-                                        <li>Developer: {{ flux_file.meta.developer }}</li>
-                                    </ul>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </li>
-            {% empty %}
-                <li>No contents found in this archive.</li>
-            {% endfor %}
+        <div class="middleComponent">
+            <div class="form-group">{{ form.collections.as_field_group }}</div>
+            <div class="form-group">{{ form.languages.as_field_group }}</div>
+            <div class="form-group">{{ form.mediatype.as_field_group }}</div>
+        </div>
         
+        {% for zip_archive in zip_archives %}
+        <div>
+            <div class="zip_header"> Zip Archive Path: {{ zip_archive.zip_path_styled|safe }}</div>
+            <div class="zip_contents">
+                {% for zip_content in zip_archive.zip_contents %}
+                    <div class=zip_content_entry>
+                        <span class="zip_contents_file">{{ zip_content.zip_content.file }}</span>
+                        <span class="zip_contents_adntl">{{ zip_content.size_kb }}</span><span class="kb">kb</span> 
+                        <span class="md5">{{ zip_content.zip_content.md5sum }}</span>
+                        <br>
+                        {% if zip_content.meta_chunk %}
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.title }}</span>
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.subtitle }}</span>
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.publisher }}</span>
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.developer }}</span>
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.copyright }}</span>
+                            <span class="zip_contents_adntl">{{ zip_content.meta_chunk.version }}</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+
         {{ form.photos.as_field_group }}
         {{ form.fluxFiles.as_field_group }}
         {{ form.randoFiles.as_field_group }}

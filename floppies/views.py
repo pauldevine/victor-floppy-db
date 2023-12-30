@@ -11,8 +11,11 @@ from django.utils import timezone
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 import datetime
+from pathlib import Path
 
 from .models import Entry, ZipContent, ZipArchive
+
+DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/'
 
 class IndexView(generic.ListView):
     template_name = "index.html"
@@ -66,27 +69,43 @@ class EntryUpdateView(generic.UpdateView):
 
         # Get the Entry instance being updated
         entry = self.object
+        zip_archives = entry.ziparchives.all()
 
-        zip_contents = []
-        entry.ziparchives.all()
-        
-        # for zip_content in ZipContent.objects.filter(zipArchive__in=entry.zipArchives.all()):
-        #     # Fetch related FluxFile objects for this ZipContent
-        #     flux_files = list(zip_content.fluxes.all())
+        # Preparing the context
+        context['entry'] = entry
+        context['zip_archives'] = []
 
-        #     # Create a dictionary to store zip_content and its related objects
-        #     zip_content_data = {
-        #         'zip_content': zip_content,
-        #         'flux_files': flux_files,
-        #         'info_chunks': [flux_file.info for flux_file in flux_files if flux_file.info],
-        #         'meta_chunks': [flux_file.meta for flux_file in flux_files if flux_file.meta]
-        #     }
+        for zip_archive in zip_archives:
+            path = Path(zip_archive.archive)
+            relative_path = path.relative_to(DISK_MUSTERING_DIR)
+            styled_path = str(relative_path).replace('/', '<span class="path-separator">/</span>')
+            zip_archive_dict = {
+                 'archive': zip_archive, 
+                 'zip_path': relative_path, 
+                 'zip_path_styled': styled_path,
+                 'zip_contents': []}
+            zip_contents = ZipContent.objects.filter(zipArchive=zip_archive)
 
-        #     zip_contents.append(zip_content_data)
+            for zip_content in zip_contents:
+                zip_content_dict = {'zip_content': zip_content}
+                zip_content_dict['size_kb'] = int(zip_content.size_bytes / 1024) + (zip_content.size_bytes % 1024 > 0) if zip_content.size_bytes else 0
 
-        # context["zip_contents"] = zip_contents
+                # Only fetch FluxFile and MetaChunk for .a2r or .flux files
+                if zip_content.suffix in ['.a2r', '.flux']:
+                    flux_file = zip_content.fluxfile if hasattr(zip_content, 'fluxfile') else None
+                    meta_chunk = flux_file.metachunk if flux_file and hasattr(flux_file, 'metachunk') else None
+                    zip_content_dict['flux_file'] = flux_file
+                    zip_content_dict['meta_chunk'] = meta_chunk
+                else:
+                    zip_content_dict['flux_file'] = None
+                    zip_content_dict['meta_chunk'] = None
+
+                zip_archive_dict['zip_contents'].append(zip_content_dict)
+
+            context['zip_archives'].append(zip_archive_dict)
+
+        # Pass the context to your template
         return context
-
 
 
 class EntryDeleteView(generic.DeleteView):

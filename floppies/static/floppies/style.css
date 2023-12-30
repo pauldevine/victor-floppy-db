@@ -1,13 +1,13 @@
 * {
  font-size: 100%;
- font-family: "Droid Sans";
+ font-family: 'Roboto', sans-serif;
 }
 
-h1 { font-family: "Droid Sans"; font-size: 24px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 26.4px; } 
-h3 { font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 15.4px; } 
-p { font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 20px; } 
-blockquote { font-family: "Droid Sans"; font-size: 21px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 30px; } 
-pre { font-family: "Droid Sans"; font-size: 13px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 18.5714px; }
+h1 { font-family: 'Roboto', sans-serif; font-size: 24px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 26.4px; } 
+h3 { font-family: 'Roboto', sans-serif;  font-size: 14px; font-style: normal; font-variant: normal; font-weight: 700; line-height: 15.4px; } 
+p { font-family: 'Roboto', sans-serif;  font-size: 14px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 20px; } 
+blockquote { font-family: 'Roboto', sans-serif; font-size: 21px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 30px; } 
+pre { font-family: 'Roboto', sans-serif; font-size: 13px; font-style: normal; font-variant: normal; font-weight: 400; line-height: 18.5714px; }
 
 
 h1 a {
@@ -15,21 +15,40 @@ h1 a {
 }
 
 label {
-  font-family: "Droid Sans"; font-size: 10px; font-style: normal; font-variant: normal; font-weight: bold; line-height: 15.4px; 
+  font-family: 'Roboto', sans-serif; font-size: 10px; font-style: normal; 
+  font-variant: normal; font-weight: bold; line-height: 15.4px; 
+  vertical-align: top;
+  display: inline-block;
 }
 
 textarea {
-   width: 700px;
+   width: 800px;
   height: 400px;
   display: block;
 }
 
 select {
   display: block;
+  min-width: 200px;
 }
 
+option:not(:checked) { 
+        background-color: #FFF; 
+    }
 
-input[type=text] { width:500px; }
+option:checked { 
+        background-color: #bbe4e9; 
+}
+
+input[type=text] { 
+    width:500px; 
+    margin-bottom: 10px;
+}
+
+input[type=url] { 
+    width:500px; 
+    margin-bottom: 10px;
+}
 
 a:link {
   text-decoration: none;
@@ -43,33 +62,65 @@ a:hover {
   text-decoration: underline;
 }
 
+.cke_wysiwyg_frame {
+        min-height: 800px;
+        max-height: 1800px;
+        min-width: 600px;
+}
+
 .list-link { 
     flex: 1;
     margin: 5px;
-    font-family: "Droid Sans"; font-size: 14px; font-style: normal; font-variant: normal; font-weight: normal; line-height: 15.4px; 
+    font-family: 'Roboto', sans-serif; font-size: 14px; font-style: normal; font-variant: normal; font-weight: normal; line-height: 15.4px; 
  }
 
 .archive-link { 
     margin: 5px;
-    font-family: "Droid Sans"; font-size: 10px; font-style: oblique; font-variant: normal; font-weight: normal; line-height: 15.4px; 
+    font-family: 'Roboto', sans-serif; font-size: 10px; font-style: oblique; font-variant: normal; font-weight: normal; line-height: 15.4px; 
  }
 
-.sidebar {
-  display: flex;
+.entries-list {
+    margin: 10px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-right: 20px; 
+}
+
+.kb {
+    font-family: 'Roboto', sans-serif; font-size: 8px; font-variant: normal; font-weight: 500; 
+    margin-left: 1.5px;
+}
+
+.md5 {
+    font-family: 'Roboto', sans-serif; font-size: 8px; font-variant: normal; font-weight: normal; 
+}
+
+.middleComponent {
+    display: inline-flex;
+    flex-direction: row;
 }
 
 .pagination {
     padding-top: 20px;
  }
 
-.entries-list {
-    margin: 10px;
- }
+.path-separator {
+    margin: 0 8px; 
+    font-weight: bolder;
+    font-size: 18px;
+}
 
 .search-form {
    flex: 1;
    margin: 5px;
 } 
+
+.sidebar {
+  display: flex;
+}
 
 .topCheckBoxContainer {
    margin: 5px;
@@ -85,3 +136,33 @@ a:hover {
    justify-content: space-between;
    align-items: center;
 }
+.zip_header {
+    font-family: 'Roboto', sans-serif;  font-size: 14px; font-style: normal; font-variant: normal; 
+    font-weight: normal; margin: 5px ; margin-top: 20px; font-weight: 500;
+}
+.zip_contents {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border: 1px solid black;
+    display: block;
+    justify-content: space-between;
+    align-items: center;
+    height: 250px;
+    overflow-y: auto;
+}
+.zip_content_entry {
+   margin: 1px;
+}
+.zip_contents_name {
+    font-family: 'Roboto', sans-serif; font-size: 10px; font-style: oblique; font-variant: normal; 
+    font-weight: normal;
+}
+
+.zip_contents_file {
+    font-family: 'Roboto', sans-serif; font-size: 11px; font-variant: normal; font-weight: normal; 
+}
+
+.zip_contents_adntl {
+    font-family: 'Roboto', sans-serif; font-size: 11px; font-variant: normal; font-weight: 500; 
+}
+

@@ -57,11 +57,13 @@ def has_zip_files(folder):
 
 def get_zip_contents(zip_file):
     zip_contents = []
-    with zipfile.ZipFile(zip_file, 'r') as zipf:
+    with zipfile.ZipFile(zip_file, 'r', metadata_encoding = "utf-8") as zipf:
         for file_info in zipf.infolist():
             #build metadata about each file
             file_meta = {}
             _, file_suffix = os.path.splitext(file_info.filename)
+            #some hidden . files were ending up as suffixes too long for the database
+            file_suffix = file_suffix[:20] if file_suffix else None 
 
             with zipf.open(file_info) as file:
                 # Read the file in chunks and update the MD5 hash
