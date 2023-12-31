@@ -58,6 +58,13 @@ class Subject(BaseModel):
     def __str__(self):
         return self.name
       
+class TextFile(BaseModel):
+    zipContent = models.OneToOneField('ZipContent', on_delete=models.CASCADE, primary_key=True)
+    raw_read = models.TextField(blank=False)
+    converted = models.TextField(blank=True, null=True)
+    def __str__(self):
+        return self.converted[:200]
+
 class ZipArchive(BaseModel):
     archive = models.CharField(max_length=2048)
     entry = models.ForeignKey('Entry', related_name='ziparchives', on_delete=models.CASCADE, blank=False, null=False)

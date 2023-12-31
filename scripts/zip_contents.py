@@ -13,6 +13,13 @@ import hashlib
 import a2r_reader
 
 IMG_SUFFIXES = ['.jpg', '.jpeg', '.gif', '.bmp']
+DESCRIPTION_FILES = [
+        "DISKID",
+        "README.TXT",
+        "README.DOC",
+        "READ.ME",
+        "Notes.*"
+    ]
 
 # Function to recursively delete empty directories
 def delete_empty_dirs(dir_path):
@@ -77,7 +84,13 @@ def get_zip_contents(zip_file):
                     file.seek(0, 0)
                     a2r_data = a2r_reader.read_a2r_datastream(file)
                     file_meta["a2r_data"] = a2r_data
-             
+                #look for possible description files
+                print("file_info.filename: {} {}".format(file_info.filename,(file_info.filename in DESCRIPTION_FILES)))
+                filename = Path(file_info.filename).name
+                if filename in DESCRIPTION_FILES:
+                    file.seek(0, 0)
+                    file_meta["description_file_contents"] = file.read()
+                    file_meta["description_file_name"] = file_info.filename
             file_meta['file_path']= file_info.filename          
             file_meta['suffix'] = file_suffix
             file_meta['size'] = file_info.file_size

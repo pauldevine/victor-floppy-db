@@ -62,6 +62,9 @@
                             <span class="zip_contents_adntl">{{ zip_content.meta_chunk.copyright }}</span>
                             <span class="zip_contents_adntl">{{ zip_content.meta_chunk.version }}</span>
                         {% endif %}
+                        {% if zip_content.file_desc %}
+                            <div class="zip_contents_adntl">{{ zip_content.file_desc }}</div>
+                        {% endif %}
                     </div>
                 {% endfor %}
             </div>

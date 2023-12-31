@@ -99,6 +99,8 @@ class EntryUpdateView(generic.UpdateView):
                 else:
                     zip_content_dict['flux_file'] = None
                     zip_content_dict['meta_chunk'] = None
+                file_desc = zip_content.textfile if hasattr(zip_content, 'textfile') else None
+                zip_content_dict['file_desc'] = file_desc
 
                 zip_archive_dict['zip_contents'].append(zip_content_dict)
 
