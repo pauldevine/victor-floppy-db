@@ -144,7 +144,7 @@ class Entry(BaseModel):
         media_files = []
 
         # Add file paths from zip archives
-        for zip_archive in self.zipArchives.all():
+        for zip_archive in self.ziparchives.all():
             media_files.append(zip_archive.archive)
 
         # Add file paths from photos

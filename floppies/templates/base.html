@@ -6,14 +6,21 @@
     <link rel="stylesheet" type="text/css" href="/static/floppies/style.css">
     <title>{% block title %}Victor Archive{% endblock %}</title>
     <meta charset="UTF-8">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="expires" content="0">
+
 </head>
 
 <body>
     <div class="sidebar" id="sidebar">
     <div class="list-link">
         {% block sidebar %}
-        <a href="/">List</a>
+        <a href="/?dateorder=True">Most Recent</a>
         {% endblock %}
+    </div>
+     <div class="list-link">
+        <a href="/">Titles</a>
     </div>
     <div class="list-link">
         <a href="/?needswork=True">Needs Work</a>

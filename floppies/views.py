@@ -26,7 +26,11 @@ class IndexView(generic.ListView):
         """Return the last twenty-five published entries."""
         needsWork = self.request.GET.get('needswork')
         nextUpload = self.request.GET.get('nextupload')
-        queryset = Entry.objects.order_by("-modified_date")
+        dateOrder = self.request.GET.get('dateorder')
+        if dateOrder:
+            queryset = Entry.objects.order_by("-modified_date")
+        else:
+            queryset = Entry.objects.order_by("title")
         if needsWork:
             queryset = queryset.filter(needsWork=True)
         if nextUpload:
