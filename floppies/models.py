@@ -133,6 +133,12 @@ class Entry(BaseModel):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
+    duplicates = models.ManyToManyField(
+        'self',
+        blank=True,
+        symmetrical=True,
+        help_text="Other entries that are exact duplicates (same MD5 hashes for all files)"
+    )
 
     class Meta:
         indexes = [
@@ -142,6 +148,77 @@ class Entry(BaseModel):
 
     def get_absolute_url(self):
         return reverse("floppies:entry-update", kwargs={"pk": self.pk})
+
+    def get_file_hashes(self):
+        """
+        Returns a sorted set of MD5 hashes for all files in this entry's ZIP archives.
+        Used for duplicate detection.
+        """
+        hashes = set()
+        for zip_archive in self.ziparchives.all():
+            for zip_content in zip_archive.zipcontent_set.all():
+                if zip_content.md5sum:
+                    hashes.add(zip_content.md5sum)
+        return frozenset(hashes)
+
+    def is_duplicate_of(self, other_entry):
+        """
+        Check if this entry is an exact duplicate of another entry.
+        Returns True if all file MD5 hashes match exactly.
+        """
+        if not isinstance(other_entry, Entry):
+            return False
+
+        # Can't be duplicate of self
+        if self.id == other_entry.id:
+            return False
+
+        # Get hash sets for both entries
+        self_hashes = self.get_file_hashes()
+        other_hashes = other_entry.get_file_hashes()
+
+        # Must have files to compare
+        if not self_hashes or not other_hashes:
+            return False
+
+        # Check if hash sets are identical
+        return self_hashes == other_hashes
+
+    def find_duplicates(self):
+        """
+        Find all entries that are exact duplicates of this one.
+        Returns a queryset of duplicate Entry objects.
+        """
+        if not self.ziparchives.exists():
+            return Entry.objects.none()
+
+        my_hashes = self.get_file_hashes()
+        if not my_hashes:
+            return Entry.objects.none()
+
+        # Get all entries with ZIP archives (excluding self)
+        candidates = Entry.objects.exclude(id=self.id).filter(ziparchives__isnull=False).distinct()
+
+        duplicates = []
+        for candidate in candidates:
+            if self.is_duplicate_of(candidate):
+                duplicates.append(candidate.id)
+
+        return Entry.objects.filter(id__in=duplicates)
+
+    def mark_as_duplicate(self, other_entry):
+        """
+        Mark this entry and another entry as duplicates of each other.
+        The relationship is symmetrical - both will show as duplicates.
+        """
+        if self.is_duplicate_of(other_entry):
+            self.duplicates.add(other_entry)
+            return True
+        return False
+
+    def has_duplicates(self):
+        """Check if this entry has any known duplicates."""
+        return self.duplicates.exists()
 
     def get_media_files(self):
         """

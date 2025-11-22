@@ -494,3 +494,297 @@ class EntryFormTest(TestCase):
         # Check that internal fields are excluded
         self.assertNotIn('created_date', form.fields)
         self.assertNotIn('modified_date', form.fields)
+
+
+class DuplicateDetectionTestCase(TestCase):
+    """Test duplicate detection functionality for Entry model."""
+
+    def setUp(self):
+        """Create test entries with ZIP archives and content."""
+        # Entry 1 with two files
+        self.entry1 = Entry.objects.create(
+            identifier="disk-001",
+            title="Disk 1"
+        )
+        zip1 = ZipArchive.objects.create(
+            archive="/path/to/disk1.zip",
+            entry=self.entry1
+        )
+        ZipContent.objects.create(
+            file="file1.txt",
+            md5sum="abc123",
+            suffix=".txt",
+            zipArchive=zip1
+        )
+        ZipContent.objects.create(
+            file="file2.txt",
+            md5sum="def456",
+            suffix=".txt",
+            zipArchive=zip1
+        )
+
+        # Entry 2 with same files (exact duplicate)
+        self.entry2 = Entry.objects.create(
+            identifier="disk-002",
+            title="Disk 2 (Duplicate of Disk 1)"
+        )
+        zip2 = ZipArchive.objects.create(
+            archive="/path/to/disk2.zip",
+            entry=self.entry2
+        )
+        ZipContent.objects.create(
+            file="copy_file1.txt",
+            md5sum="abc123",  # Same hash as entry1
+            suffix=".txt",
+            zipArchive=zip2
+        )
+        ZipContent.objects.create(
+            file="copy_file2.txt",
+            md5sum="def456",  # Same hash as entry1
+            suffix=".txt",
+            zipArchive=zip2
+        )
+
+        # Entry 3 with different files
+        self.entry3 = Entry.objects.create(
+            identifier="disk-003",
+            title="Disk 3 (Different)"
+        )
+        zip3 = ZipArchive.objects.create(
+            archive="/path/to/disk3.zip",
+            entry=self.entry3
+        )
+        ZipContent.objects.create(
+            file="other_file.txt",
+            md5sum="xyz789",
+            suffix=".txt",
+            zipArchive=zip3
+        )
+
+        # Entry 4 with no ZIP archives
+        self.entry4 = Entry.objects.create(
+            identifier="disk-004",
+            title="Disk 4 (No Files)"
+        )
+
+        # Entry 5 with partial overlap
+        self.entry5 = Entry.objects.create(
+            identifier="disk-005",
+            title="Disk 5 (Partial Match)"
+        )
+        zip5 = ZipArchive.objects.create(
+            archive="/path/to/disk5.zip",
+            entry=self.entry5
+        )
+        ZipContent.objects.create(
+            file="file1.txt",
+            md5sum="abc123",  # Same as entry1's first file
+            suffix=".txt",
+            zipArchive=zip5
+        )
+        ZipContent.objects.create(
+            file="different.txt",
+            md5sum="ghi999",  # Different
+            suffix=".txt",
+            zipArchive=zip5
+        )
+
+    def test_get_file_hashes(self):
+        """Test that get_file_hashes returns correct hash set."""
+        hashes1 = self.entry1.get_file_hashes()
+        self.assertEqual(len(hashes1), 2)
+        self.assertIn("abc123", hashes1)
+        self.assertIn("def456", hashes1)
+        self.assertIsInstance(hashes1, frozenset)
+
+    def test_get_file_hashes_empty(self):
+        """Test get_file_hashes for entry with no files."""
+        hashes = self.entry4.get_file_hashes()
+        self.assertEqual(len(hashes), 0)
+        self.assertIsInstance(hashes, frozenset)
+
+    def test_is_duplicate_of_exact_match(self):
+        """Test that exact duplicates are detected."""
+        self.assertTrue(self.entry1.is_duplicate_of(self.entry2))
+        self.assertTrue(self.entry2.is_duplicate_of(self.entry1))
+
+    def test_is_duplicate_of_different(self):
+        """Test that different entries are not duplicates."""
+        self.assertFalse(self.entry1.is_duplicate_of(self.entry3))
+        self.assertFalse(self.entry3.is_duplicate_of(self.entry1))
+
+    def test_is_duplicate_of_partial_match(self):
+        """Test that partial matches are not considered duplicates."""
+        self.assertFalse(self.entry1.is_duplicate_of(self.entry5))
+        self.assertFalse(self.entry5.is_duplicate_of(self.entry1))
+
+    def test_is_duplicate_of_self(self):
+        """Test that entry is not considered a duplicate of itself."""
+        self.assertFalse(self.entry1.is_duplicate_of(self.entry1))
+
+    def test_is_duplicate_of_no_files(self):
+        """Test duplicate detection with entries that have no files."""
+        self.assertFalse(self.entry1.is_duplicate_of(self.entry4))
+        self.assertFalse(self.entry4.is_duplicate_of(self.entry1))
+        self.assertFalse(self.entry4.is_duplicate_of(self.entry4))
+
+    def test_is_duplicate_of_invalid_type(self):
+        """Test that is_duplicate_of handles invalid input."""
+        self.assertFalse(self.entry1.is_duplicate_of(None))
+        self.assertFalse(self.entry1.is_duplicate_of("not an entry"))
+        self.assertFalse(self.entry1.is_duplicate_of(123))
+
+    def test_find_duplicates(self):
+        """Test that find_duplicates finds all matching entries."""
+        duplicates = self.entry1.find_duplicates()
+        self.assertEqual(duplicates.count(), 1)
+        self.assertIn(self.entry2, duplicates)
+        self.assertNotIn(self.entry3, duplicates)
+        self.assertNotIn(self.entry5, duplicates)
+
+    def test_find_duplicates_returns_queryset(self):
+        """Test that find_duplicates returns a QuerySet."""
+        from django.db.models import QuerySet
+        duplicates = self.entry1.find_duplicates()
+        self.assertIsInstance(duplicates, QuerySet)
+
+    def test_find_duplicates_no_matches(self):
+        """Test find_duplicates when there are no duplicates."""
+        duplicates = self.entry3.find_duplicates()
+        self.assertEqual(duplicates.count(), 0)
+
+    def test_find_duplicates_no_files(self):
+        """Test find_duplicates for entry with no files."""
+        duplicates = self.entry4.find_duplicates()
+        self.assertEqual(duplicates.count(), 0)
+
+    def test_mark_as_duplicate(self):
+        """Test marking entries as duplicates."""
+        result = self.entry1.mark_as_duplicate(self.entry2)
+        self.assertTrue(result)
+
+        # Check that relationship was created (symmetrical)
+        self.assertIn(self.entry2, self.entry1.duplicates.all())
+        self.assertIn(self.entry1, self.entry2.duplicates.all())
+
+    def test_mark_as_duplicate_non_duplicate(self):
+        """Test that marking non-duplicates returns False."""
+        result = self.entry1.mark_as_duplicate(self.entry3)
+        self.assertFalse(result)
+
+        # Check that no relationship was created
+        self.assertNotIn(self.entry3, self.entry1.duplicates.all())
+
+    def test_mark_as_duplicate_idempotent(self):
+        """Test that marking duplicates multiple times is idempotent."""
+        self.entry1.mark_as_duplicate(self.entry2)
+        self.entry1.mark_as_duplicate(self.entry2)
+
+        # Should still only have one duplicate relationship
+        self.assertEqual(self.entry1.duplicates.count(), 1)
+        self.assertEqual(self.entry2.duplicates.count(), 1)
+
+    def test_has_duplicates_true(self):
+        """Test has_duplicates returns True when duplicates exist."""
+        self.entry1.mark_as_duplicate(self.entry2)
+        self.assertTrue(self.entry1.has_duplicates())
+        self.assertTrue(self.entry2.has_duplicates())
+
+    def test_has_duplicates_false(self):
+        """Test has_duplicates returns False when no duplicates exist."""
+        self.assertFalse(self.entry1.has_duplicates())
+        self.assertFalse(self.entry3.has_duplicates())
+
+    def test_clear_duplicates(self):
+        """Test clearing duplicate relationships."""
+        self.entry1.mark_as_duplicate(self.entry2)
+        self.assertTrue(self.entry1.has_duplicates())
+
+        self.entry1.duplicates.clear()
+        self.assertFalse(self.entry1.has_duplicates())
+        self.assertFalse(self.entry2.has_duplicates())  # Symmetrical
+
+    def test_multiple_duplicates(self):
+        """Test entry can have multiple duplicates."""
+        # Create another exact duplicate
+        entry6 = Entry.objects.create(
+            identifier="disk-006",
+            title="Disk 6 (Another Duplicate)"
+        )
+        zip6 = ZipArchive.objects.create(
+            archive="/path/to/disk6.zip",
+            entry=entry6
+        )
+        ZipContent.objects.create(
+            file="another_file1.txt",
+            md5sum="abc123",
+            suffix=".txt",
+            zipArchive=zip6
+        )
+        ZipContent.objects.create(
+            file="another_file2.txt",
+            md5sum="def456",
+            suffix=".txt",
+            zipArchive=zip6
+        )
+
+        # Mark both as duplicates
+        self.entry1.mark_as_duplicate(self.entry2)
+        self.entry1.mark_as_duplicate(entry6)
+
+        self.assertEqual(self.entry1.duplicates.count(), 2)
+        self.assertIn(self.entry2, self.entry1.duplicates.all())
+        self.assertIn(entry6, self.entry1.duplicates.all())
+
+    def test_hash_comparison_with_null_md5(self):
+        """Test that entries with null MD5 sums are handled correctly."""
+        entry7 = Entry.objects.create(
+            identifier="disk-007",
+            title="Disk 7 (Null MD5)"
+        )
+        zip7 = ZipArchive.objects.create(
+            archive="/path/to/disk7.zip",
+            entry=entry7
+        )
+        ZipContent.objects.create(
+            file="no_hash.txt",
+            md5sum=None,  # No hash
+            suffix=".txt",
+            zipArchive=zip7
+        )
+
+        hashes = entry7.get_file_hashes()
+        self.assertEqual(len(hashes), 0)  # Null hashes should be excluded
+
+    def test_duplicate_detection_with_multiple_zip_archives(self):
+        """Test duplicate detection works with entries that have multiple ZIP archives."""
+        entry8 = Entry.objects.create(
+            identifier="disk-008",
+            title="Disk 8 (Multiple ZIPs)"
+        )
+        # First ZIP
+        zip8a = ZipArchive.objects.create(
+            archive="/path/to/disk8a.zip",
+            entry=entry8
+        )
+        ZipContent.objects.create(
+            file="file1.txt",
+            md5sum="abc123",
+            suffix=".txt",
+            zipArchive=zip8a
+        )
+        # Second ZIP
+        zip8b = ZipArchive.objects.create(
+            archive="/path/to/disk8b.zip",
+            entry=entry8
+        )
+        ZipContent.objects.create(
+            file="file2.txt",
+            md5sum="def456",
+            suffix=".txt",
+            zipArchive=zip8b
+        )
+
+        # Should still detect as duplicate of entry1
+        self.assertTrue(self.entry1.is_duplicate_of(entry8))
+        self.assertTrue(entry8.is_duplicate_of(self.entry1))

@@ -9,11 +9,11 @@ from .models import (
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
     """Enhanced admin for Entry model with search, filters, and better display."""
-    list_display = ['identifier', 'title', 'mediatype', 'uploaded', 'needsWork', 'readyToUpload', 'modified_date']
-    list_filter = ['uploaded', 'needsWork', 'readyToUpload', 'mediatype', 'hasFluxFile', 'hasFileContents']
+    list_display = ['identifier', 'title', 'mediatype', 'uploaded', 'needsWork', 'readyToUpload', 'duplicate_badge', 'modified_date']
+    list_filter = ['uploaded', 'needsWork', 'readyToUpload', 'mediatype', 'hasFluxFile', 'hasFileContents', 'HasDuplicatesFilter']
     search_fields = ['identifier', 'title', 'description']
     date_hierarchy = 'modified_date'
-    filter_horizontal = ['creators', 'collections', 'contributors', 'languages', 'subjects']
+    filter_horizontal = ['creators', 'collections', 'contributors', 'languages', 'subjects', 'duplicates']
     readonly_fields = ['created_date', 'modified_date']
     fieldsets = (
         ('Identification', {
@@ -25,12 +25,25 @@ class EntryAdmin(admin.ModelAdmin):
         ('Status Flags', {
             'fields': ('uploaded', 'needsWork', 'readyToUpload', 'hasFluxFile', 'hasFileContents', 'hasDiskImg')
         }),
+        ('Duplicates', {
+            'fields': ('duplicates',),
+            'classes': ('collapse',),
+            'description': 'Entries that contain exactly the same files (based on MD5 hashes)'
+        }),
         ('Timestamps', {
             'fields': ('created_date', 'modified_date'),
             'classes': ('collapse',)
         }),
     )
-    actions = ['mark_ready_to_upload', 'mark_needs_work', 'mark_uploaded']
+    actions = ['mark_ready_to_upload', 'mark_needs_work', 'mark_uploaded', 'find_and_mark_duplicates', 'clear_duplicate_marks']
+
+    def duplicate_badge(self, obj):
+        """Display a badge showing duplicate count."""
+        count = obj.duplicates.count()
+        if count > 0:
+            return f'🔄 {count}'
+        return '-'
+    duplicate_badge.short_description = 'Duplicates'
 
     def mark_ready_to_upload(self, request, queryset):
         """Mark selected entries as ready to upload."""
@@ -49,6 +62,57 @@ class EntryAdmin(admin.ModelAdmin):
         updated = queryset.update(uploaded=True)
         self.message_user(request, f'{updated} entries marked as uploaded.')
     mark_uploaded.short_description = 'Mark as uploaded'
+
+    def find_and_mark_duplicates(self, request, queryset):
+        """Find and mark duplicates for selected entries."""
+        marked_count = 0
+        duplicate_pairs = []
+
+        for entry in queryset:
+            duplicates = entry.find_duplicates()
+            for duplicate in duplicates:
+                if entry.mark_as_duplicate(duplicate):
+                    marked_count += 1
+                    duplicate_pairs.append(f'{entry.identifier} ⟷ {duplicate.identifier}')
+
+        if marked_count > 0:
+            self.message_user(
+                request,
+                f'Found and marked {marked_count} duplicate relationships. Examples: {", ".join(duplicate_pairs[:5])}'
+            )
+        else:
+            self.message_user(request, 'No duplicates found for selected entries.', level='WARNING')
+    find_and_mark_duplicates.short_description = 'Find and mark duplicates'
+
+    def clear_duplicate_marks(self, request, queryset):
+        """Clear all duplicate marks for selected entries."""
+        cleared_count = 0
+        for entry in queryset:
+            count = entry.duplicates.count()
+            if count > 0:
+                entry.duplicates.clear()
+                cleared_count += 1
+
+        self.message_user(request, f'Cleared duplicate marks for {cleared_count} entries.')
+    clear_duplicate_marks.short_description = 'Clear duplicate marks'
+
+
+class HasDuplicatesFilter(admin.SimpleListFilter):
+    """Custom filter to show entries with or without duplicates."""
+    title = 'has duplicates'
+    parameter_name = 'has_duplicates'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('yes', 'Yes'),
+            ('no', 'No'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            return queryset.filter(duplicates__isnull=False).distinct()
+        if self.value() == 'no':
+            return queryset.filter(duplicates__isnull=True)
 
 
 @admin.register(Creator)
