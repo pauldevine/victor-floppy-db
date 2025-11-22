@@ -1,6 +1,7 @@
 # Generated migration to add database indexes for performance
 
 from django.db import migrations, models
+import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -10,6 +11,93 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # First, add created_date and modified_date fields to Django's state
+        # (These fields already exist in DB from BaseModel but weren't in migration state)
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddField(
+                    model_name='entry',
+                    name='created_date',
+                    field=models.DateTimeField(auto_now_add=True),
+                ),
+                migrations.AddField(
+                    model_name='entry',
+                    name='modified_date',
+                    field=models.DateTimeField(auto_now=True),
+                ),
+            ],
+            database_operations=[],  # Fields already exist in DB
+        ),
+        # Add missing models to state that exist in DB but not in migrations
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.CreateModel(
+                    name='ZipContent',
+                    fields=[
+                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                        ('created_date', models.DateTimeField(auto_now_add=True)),
+                        ('modified_date', models.DateTimeField(auto_now=True)),
+                        ('file', models.CharField(max_length=2048)),
+                        ('md5sum', models.CharField(blank=True, max_length=32, null=True)),
+                        ('suffix', models.CharField(blank=True, max_length=20, null=True)),
+                        ('size_bytes', models.BigIntegerField(blank=True, null=True)),
+                        ('zipArchive', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='floppies.ziparchive')),
+                    ],
+                    options={
+                        'abstract': False,
+                    },
+                ),
+                migrations.CreateModel(
+                    name='FluxFile',
+                    fields=[
+                        ('zipContent', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, serialize=False, to='floppies.zipcontent')),
+                        ('file', models.CharField(max_length=2048)),
+                    ],
+                ),
+                migrations.CreateModel(
+                    name='TextFile',
+                    fields=[
+                        ('zipContent', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, serialize=False, to='floppies.zipcontent')),
+                        ('raw_read', models.TextField()),
+                        ('converted', models.TextField(blank=True, null=True)),
+                    ],
+                ),
+                migrations.CreateModel(
+                    name='InfoChunk',
+                    fields=[
+                        ('fluxFile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, serialize=False, to='floppies.fluxfile')),
+                        ('info_version', models.PositiveSmallIntegerField()),
+                        ('creator', models.CharField(max_length=32)),
+                        ('drive_type', models.PositiveSmallIntegerField()),
+                        ('write_protected', models.BooleanField()),
+                        ('synchronized', models.BooleanField()),
+                        ('hard_sector_count', models.PositiveSmallIntegerField()),
+                    ],
+                ),
+                migrations.CreateModel(
+                    name='MetaChunk',
+                    fields=[
+                        ('fluxFile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, serialize=False, to='floppies.fluxfile')),
+                        ('title', models.CharField(blank=True, max_length=255)),
+                        ('subtitle', models.CharField(blank=True, max_length=255, null=True)),
+                        ('publisher', models.CharField(blank=True, max_length=255, null=True)),
+                        ('developer', models.CharField(blank=True, max_length=255, null=True)),
+                        ('copyright', models.CharField(blank=True, max_length=255, null=True)),
+                        ('version', models.CharField(blank=True, max_length=255, null=True)),
+                        ('language', models.CharField(blank=True, max_length=2, null=True)),
+                        ('requires_platform', models.CharField(blank=True, max_length=255, null=True)),
+                        ('requires_machine', models.CharField(blank=True, max_length=255, null=True)),
+                        ('requires_ram', models.CharField(blank=True, max_length=255, null=True)),
+                        ('notes', models.TextField(blank=True, null=True)),
+                        ('side', models.CharField(blank=True, max_length=255, null=True)),
+                        ('side_name', models.CharField(blank=True, max_length=255, null=True)),
+                        ('contributor', models.CharField(blank=True, max_length=255, null=True)),
+                        ('image_date', models.DateTimeField(blank=True, null=True)),
+                    ],
+                ),
+            ],
+            database_operations=[],  # All models already exist in DB
+        ),
         # Add index to Entry.identifier (frequently searched/filtered)
         migrations.AlterField(
             model_name='entry',
