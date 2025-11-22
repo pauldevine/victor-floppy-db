@@ -75,7 +75,7 @@ class ZipContent(BaseModel):
     zipArchive = models.ForeignKey('ZipArchive', on_delete=models.CASCADE, blank=False, null=False)
     file = models.CharField(max_length=2048)
     md5sum = models.CharField(max_length=32, blank=True, null=True)
-    suffix = models.CharField(max_length=20, blank=True, null=True)
+    suffix = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     size_bytes = models.BigIntegerField(blank=True, null=True)
     def __str__(self):
         return self.file
@@ -111,10 +111,10 @@ class Entry(BaseModel):
             return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
 
 
-    identifier = models.CharField(max_length=500)
+    identifier = models.CharField(max_length=500, db_index=True)
     fullArchivePath = models.URLField(max_length=600, blank=True, null=True)
     folder = models.CharField(max_length=2048, blank=True, null=True)
-    title = models.CharField(max_length=500)
+    title = models.CharField(max_length=500, db_index=True)
     creators = models.ManyToManyField(Creator, blank=True)
     publicationDate = models.DateField(null=True, blank=True)
     collections = models.ManyToManyField(ArchCollection, blank=True)
@@ -133,7 +133,13 @@ class Entry(BaseModel):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
-    
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['uploaded', 'readyToUpload', 'needsWork'], name='entry_upload_status_idx'),
+            models.Index(fields=['-modified_date'], name='entry_modified_date_idx'),
+        ]
+
     def get_absolute_url(self):
         return reverse("floppies:entry-update", kwargs={"pk": self.pk})
 
