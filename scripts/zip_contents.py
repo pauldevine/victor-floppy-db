@@ -1,16 +1,22 @@
-#this script will walk a directory and turn all subfolders into zip files and 
-#images to upload to the internet archive. any file other than .jpg and .gif 
+#this script will walk a directory and turn all subfolders into zip files and
+#images to upload to the internet archive. any file other than .jpg and .gif
 #goes into a zip file to upload to the internet archive.
 
 import zipfile
 import os
 import argparse
-from osxmetadata import OSXMetaData
 import pathlib
 from pathlib import Path
 from datetime import datetime
 import hashlib
 import a2r_reader
+
+# Make macOS metadata optional (only available on macOS)
+try:
+    from osxmetadata import OSXMetaData
+    HAS_OSX_METADATA = True
+except ImportError:
+    HAS_OSX_METADATA = False
 
 IMG_SUFFIXES = ['.jpg', '.jpeg', '.gif', '.bmp']
 DESCRIPTION_FILES = [
@@ -38,7 +44,8 @@ def find_target_folders(folder_path):
     for root, dirs, files in os.walk(folder_path):
         for folder in dirs:
             dir_path = os.path.join(root, folder)
-            metadata = OSXMetaData(dir_path)
+            # Note: OSXMetaData was instantiated but not used here
+            # Removed unused instantiation
             target_folders.append(dir_path)
     return target_folders
 

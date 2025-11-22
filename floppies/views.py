@@ -6,6 +6,7 @@ from django.views import generic
 from django.core.paginator import Paginator
 from django.views.generic import ListView
 from django.db.models import Q
+from django.conf import settings
 
 from django.utils import timezone
 from django.views.generic.detail import DetailView
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from .models import Entry, ZipContent, ZipArchive
 
-DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/'
+DISK_MUSTERING_DIR = settings.DISK_MUSTERING_DIR
 
 class IndexView(generic.ListView):
     template_name = "index.html"
@@ -73,7 +74,12 @@ class EntryUpdateView(generic.UpdateView):
 
         # Get the Entry instance being updated
         entry = self.object
-        zip_archives = entry.ziparchives.all()
+        # Fix N+1 query problem: prefetch related data
+        zip_archives = entry.ziparchives.prefetch_related(
+            'zipcontent_set__fluxfile__metachunk',
+            'zipcontent_set__fluxfile__infochunk',
+            'zipcontent_set__textfile'
+        ).all()
 
         # Preparing the context
         context['entry'] = entry
@@ -81,14 +87,18 @@ class EntryUpdateView(generic.UpdateView):
 
         for zip_archive in zip_archives:
             path = Path(zip_archive.archive)
-            relative_path = path.relative_to(DISK_MUSTERING_DIR)
+            try:
+                relative_path = path.relative_to(DISK_MUSTERING_DIR)
+            except ValueError:
+                # If path is not relative to DISK_MUSTERING_DIR, use full path
+                relative_path = path
             styled_path = str(relative_path).replace('/', '<span class="path-separator">/</span>')
             zip_archive_dict = {
-                 'archive': zip_archive, 
-                 'zip_path': relative_path, 
+                 'archive': zip_archive,
+                 'zip_path': relative_path,
                  'zip_path_styled': styled_path,
                  'zip_contents': []}
-            zip_contents = ZipContent.objects.filter(zipArchive=zip_archive)
+            zip_contents = zip_archive.zipcontent_set.all()
 
             for zip_content in zip_contents:
                 zip_content_dict = {'zip_content': zip_content}

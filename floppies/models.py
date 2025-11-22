@@ -159,12 +159,14 @@ class Entry(BaseModel):
 class ScriptRun(BaseModel):
     entry = models.ForeignKey('Entry', on_delete=models.CASCADE, blank=False, null=False)
     text = models.TextField(blank=False)
-    rumtime = models.DateTimeField(auto_now_add=True)
+    runtime = models.DateTimeField(auto_now_add=True)
     parentPath = models.CharField(max_length=2048, blank=True, null=True)
     function = models.CharField(max_length=512, blank=True, null=True)
     script = models.CharField(max_length=2048, blank=True, null=True)
+
     def __str__(self):
-        return self.parentPath + " " + self.rumtime.strftime("%Y-%m-%d %H:%M:%S")
+        path = self.parentPath or "No Path"
+        return f"{path} {self.runtime.strftime('%Y-%m-%d %H:%M:%S')}"
 
 class InfoChunk(BaseModel):
     # INFO Version (1 byte)
