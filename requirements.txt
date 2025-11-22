@@ -12,7 +12,7 @@ django-extensions==3.2.3
 django-ckeditor==6.7.0
 
 # Internet Archive Integration
-internetarchive==4.2.0
+internetarchive==5.7.1
 
 # Date Parsing
 python-dateutil==2.9.0
