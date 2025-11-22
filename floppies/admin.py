@@ -8,13 +8,31 @@ from .models import (
 from . import archive_sync
 
 
+class HasDuplicatesFilter(admin.SimpleListFilter):
+    """Custom filter to show entries with or without duplicates."""
+    title = 'has duplicates'
+    parameter_name = 'has_duplicates'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('yes', 'Yes'),
+            ('no', 'No'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            return queryset.filter(duplicates__isnull=False).distinct()
+        if self.value() == 'no':
+            return queryset.filter(duplicates__isnull=True)
+
+
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
     """Enhanced admin for Entry model with search, filters, and better display."""
     list_display = ['identifier', 'title', 'mediatype', 'uploaded', 'needsWork', 'readyToUpload',
                     'duplicate_badge', 'sync_status_badge', 'modified_date']
     list_filter = ['uploaded', 'needsWork', 'readyToUpload', 'mediatype', 'hasFluxFile', 'hasFileContents',
-                   'archive_sync_status', 'HasDuplicatesFilter']
+                   'archive_sync_status', HasDuplicatesFilter]
     search_fields = ['identifier', 'title', 'description']
     date_hierarchy = 'modified_date'
     filter_horizontal = ['creators', 'collections', 'contributors', 'languages', 'subjects', 'duplicates']
@@ -214,24 +232,6 @@ class EntryAdmin(admin.ModelAdmin):
         if error_count > 0:
             self.message_user(request, f'❌ {error_count} entries had errors.', level='ERROR')
     push_to_archive.short_description = '⬆️ Push to Internet Archive (overwrite remote)'
-
-
-class HasDuplicatesFilter(admin.SimpleListFilter):
-    """Custom filter to show entries with or without duplicates."""
-    title = 'has duplicates'
-    parameter_name = 'has_duplicates'
-
-    def lookups(self, request, model_admin):
-        return (
-            ('yes', 'Yes'),
-            ('no', 'No'),
-        )
-
-    def queryset(self, request, queryset):
-        if self.value() == 'yes':
-            return queryset.filter(duplicates__isnull=False).distinct()
-        if self.value() == 'no':
-            return queryset.filter(duplicates__isnull=True)
 
 
 @admin.register(Creator)

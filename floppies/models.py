@@ -128,7 +128,7 @@ class Entry(BaseModel):
     collections = models.ManyToManyField(ArchCollection, blank=True)
     mediatype = models.CharField(
         max_length=2,
-        choices=Mediatypes,
+        choices=Mediatypes.choices,
         default=Mediatypes.SOFTWARE,
     )
     contributors = models.ManyToManyField(Contributor, blank=True)
@@ -145,7 +145,7 @@ class Entry(BaseModel):
     # Internet Archive synchronization fields
     archive_sync_status = models.CharField(
         max_length=2,
-        choices=ArchiveSyncStatus,
+        choices=ArchiveSyncStatus.choices,
         default=ArchiveSyncStatus.NEVER_CHECKED,
         help_text="Current synchronization status with Internet Archive"
     )
