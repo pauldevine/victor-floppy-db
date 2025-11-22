@@ -788,3 +788,192 @@ class DuplicateDetectionTestCase(TestCase):
         # Should still detect as duplicate of entry1
         self.assertTrue(self.entry1.is_duplicate_of(entry8))
         self.assertTrue(entry8.is_duplicate_of(self.entry1))
+
+
+class ArchiveSyncTestCase(TestCase):
+    """Test Internet Archive synchronization functionality."""
+
+    def setUp(self):
+        """Create test entry for sync testing."""
+        self.entry = Entry.objects.create(
+            identifier="test-disk-001",
+            title="Test Disk 1",
+            description="Test description",
+            mediatype=Entry.Mediatypes.SOFTWARE
+        )
+
+    def test_archive_sync_status_default(self):
+        """Test that archive_sync_status defaults to NEVER_CHECKED."""
+        self.assertEqual(self.entry.archive_sync_status, Entry.ArchiveSyncStatus.NEVER_CHECKED)
+
+    def test_last_sync_check_default(self):
+        """Test that last_sync_check is initially None."""
+        self.assertIsNone(self.entry.last_sync_check)
+
+    def test_last_archive_sync_default(self):
+        """Test that last_archive_sync is initially None."""
+        self.assertIsNone(self.entry.last_archive_sync)
+
+    def test_sync_notes_default(self):
+        """Test that sync_notes is initially None."""
+        self.assertIsNone(self.entry.sync_notes)
+
+    def test_archive_sync_status_choices(self):
+        """Test all archive sync status choices can be set."""
+        statuses = [
+            Entry.ArchiveSyncStatus.NEVER_CHECKED,
+            Entry.ArchiveSyncStatus.IN_SYNC,
+            Entry.ArchiveSyncStatus.OUT_OF_SYNC,
+            Entry.ArchiveSyncStatus.LOCAL_ONLY,
+            Entry.ArchiveSyncStatus.ARCHIVE_ONLY,
+            Entry.ArchiveSyncStatus.ERROR,
+        ]
+
+        for status in statuses:
+            self.entry.archive_sync_status = status
+            self.entry.save()
+            self.entry.refresh_from_db()
+            self.assertEqual(self.entry.archive_sync_status, status)
+
+    def test_sync_status_update(self):
+        """Test updating sync status fields."""
+        from django.utils import timezone
+        now = timezone.now()
+
+        self.entry.archive_sync_status = Entry.ArchiveSyncStatus.IN_SYNC
+        self.entry.last_sync_check = now
+        self.entry.last_archive_sync = now
+        self.entry.sync_notes = "Test sync notes"
+        self.entry.save()
+
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.archive_sync_status, Entry.ArchiveSyncStatus.IN_SYNC)
+        self.assertIsNotNone(self.entry.last_sync_check)
+        self.assertIsNotNone(self.entry.last_archive_sync)
+        self.assertEqual(self.entry.sync_notes, "Test sync notes")
+
+    def test_sync_notes_can_be_long(self):
+        """Test that sync_notes can store long text."""
+        long_notes = "Difference: " * 200  # Long text
+        self.entry.sync_notes = long_notes
+        self.entry.save()
+
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.sync_notes, long_notes)
+
+    def test_archive_sync_status_display(self):
+        """Test that archive sync status has proper display values."""
+        self.entry.archive_sync_status = Entry.ArchiveSyncStatus.IN_SYNC
+        display_value = self.entry.get_archive_sync_status_display()
+        self.assertIn("Sync", display_value)
+
+    def test_filter_by_sync_status(self):
+        """Test filtering entries by sync status."""
+        # Create multiple entries with different statuses
+        Entry.objects.create(
+            identifier="test-002",
+            title="Test 2",
+            archive_sync_status=Entry.ArchiveSyncStatus.IN_SYNC
+        )
+        Entry.objects.create(
+            identifier="test-003",
+            title="Test 3",
+            archive_sync_status=Entry.ArchiveSyncStatus.OUT_OF_SYNC
+        )
+        Entry.objects.create(
+            identifier="test-004",
+            title="Test 4",
+            archive_sync_status=Entry.ArchiveSyncStatus.IN_SYNC
+        )
+
+        # Test filtering
+        in_sync = Entry.objects.filter(archive_sync_status=Entry.ArchiveSyncStatus.IN_SYNC)
+        self.assertEqual(in_sync.count(), 2)
+
+        out_of_sync = Entry.objects.filter(archive_sync_status=Entry.ArchiveSyncStatus.OUT_OF_SYNC)
+        self.assertEqual(out_of_sync.count(), 1)
+
+        never_checked = Entry.objects.filter(archive_sync_status=Entry.ArchiveSyncStatus.NEVER_CHECKED)
+        self.assertEqual(never_checked.count(), 1)  # The setUp entry
+
+    def test_sync_timestamps_ordering(self):
+        """Test ordering entries by sync timestamps."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        now = timezone.now()
+
+        # Create entries with different sync times
+        entry1 = Entry.objects.create(
+            identifier="test-005",
+            title="Test 5",
+            last_sync_check=now - timedelta(hours=5)
+        )
+        entry2 = Entry.objects.create(
+            identifier="test-006",
+            title="Test 6",
+            last_sync_check=now - timedelta(hours=2)
+        )
+        entry3 = Entry.objects.create(
+            identifier="test-007",
+            title="Test 7",
+            last_sync_check=now - timedelta(hours=10)
+        )
+
+        # Order by last_sync_check
+        ordered = Entry.objects.filter(
+            last_sync_check__isnull=False
+        ).order_by('-last_sync_check')
+
+        self.assertEqual(ordered[0].identifier, "test-006")  # Most recent
+        self.assertEqual(ordered[1].identifier, "test-005")
+        self.assertEqual(ordered[2].identifier, "test-007")  # Oldest
+
+
+class ArchiveSyncUtilsTestCase(TestCase):
+    """Test archive_sync utility functions (unit tests, no actual API calls)."""
+
+    def setUp(self):
+        """Create test entries."""
+        self.entry = Entry.objects.create(
+            identifier="test-disk-001",
+            title="Test Disk 1",
+            description="<p>Test description</p>",
+            mediatype=Entry.Mediatypes.SOFTWARE
+        )
+
+        # Add some related objects
+        creator = Creator.objects.create(name="Test Creator")
+        self.entry.creators.add(creator)
+
+        subject = Subject.objects.create(name="Test Subject")
+        self.entry.subjects.add(subject)
+
+    def test_archive_sync_module_imports(self):
+        """Test that archive_sync module imports correctly."""
+        from floppies import archive_sync
+        self.assertTrue(hasattr(archive_sync, 'check_entry_sync_status'))
+        self.assertTrue(hasattr(archive_sync, 'pull_from_archive'))
+        self.assertTrue(hasattr(archive_sync, 'push_to_archive'))
+        self.assertTrue(hasattr(archive_sync, 'bulk_check_sync_status'))
+
+    def test_archive_sync_error_class(self):
+        """Test that ArchiveSyncError is defined."""
+        from floppies.archive_sync import ArchiveSyncError
+        error = ArchiveSyncError("Test error")
+        self.assertIsInstance(error, Exception)
+        self.assertEqual(str(error), "Test error")
+
+    def test_check_ia_available(self):
+        """Test check_ia_available function."""
+        from floppies import archive_sync
+
+        # This test will vary based on whether internetarchive is installed
+        # We're just testing that the function exists and can be called
+        try:
+            archive_sync.check_ia_available()
+            # If we get here, IA is available
+            self.assertTrue(archive_sync.IA_AVAILABLE)
+        except archive_sync.ArchiveSyncError:
+            # If we get an error, IA is not available
+            self.assertFalse(archive_sync.IA_AVAILABLE)

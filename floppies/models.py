@@ -110,6 +110,14 @@ class Entry(BaseModel):
             }
             return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
 
+    class ArchiveSyncStatus(models.TextChoices):
+        NEVER_CHECKED = "NC", _("Never Checked")
+        IN_SYNC = "IS", _("In Sync")
+        OUT_OF_SYNC = "OS", _("Out of Sync")
+        LOCAL_ONLY = "LO", _("Local Only (Not in Archive)")
+        ARCHIVE_ONLY = "AO", _("Archive Only (Not Local)")
+        ERROR = "ER", _("Sync Error")
+
 
     identifier = models.CharField(max_length=500, db_index=True)
     fullArchivePath = models.URLField(max_length=600, blank=True, null=True)
@@ -133,6 +141,30 @@ class Entry(BaseModel):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
+
+    # Internet Archive synchronization fields
+    archive_sync_status = models.CharField(
+        max_length=2,
+        choices=ArchiveSyncStatus,
+        default=ArchiveSyncStatus.NEVER_CHECKED,
+        help_text="Current synchronization status with Internet Archive"
+    )
+    last_sync_check = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time sync status was checked against Internet Archive"
+    )
+    last_archive_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this entry was successfully synchronized with Internet Archive"
+    )
+    sync_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Details about synchronization differences or issues"
+    )
+
     duplicates = models.ManyToManyField(
         'self',
         blank=True,
