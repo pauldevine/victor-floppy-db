@@ -6,6 +6,8 @@ from django.views import generic
 from django.core.paginator import Paginator
 from django.views.generic import ListView
 from django.db.models import Q
+from django.conf import settings
+import logging
 
 from django.utils import timezone
 from django.views.generic.detail import DetailView
@@ -15,12 +17,19 @@ from pathlib import Path
 
 from .models import Entry, ZipContent, ZipArchive
 
-DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/'
+# Constants
+DISK_MUSTERING_DIR = settings.DISK_MUSTERING_DIR
+ENTRIES_PER_PAGE = 25
+BYTES_PER_KB = 1024
+
+# Logger
+logger = logging.getLogger(__name__)
+
 
 class IndexView(generic.ListView):
     template_name = "index.html"
     context_object_name = "latest_entry_list"
-    paginate_by = 25
+    paginate_by = ENTRIES_PER_PAGE
 
     def get_queryset(self):
         """Return the last twenty-five published entries."""
@@ -73,7 +82,12 @@ class EntryUpdateView(generic.UpdateView):
 
         # Get the Entry instance being updated
         entry = self.object
-        zip_archives = entry.ziparchives.all()
+        # Fix N+1 query problem: prefetch related data
+        zip_archives = entry.ziparchives.prefetch_related(
+            'zipcontent_set__fluxfile__metachunk',
+            'zipcontent_set__fluxfile__infochunk',
+            'zipcontent_set__textfile'
+        ).all()
 
         # Preparing the context
         context['entry'] = entry
@@ -81,18 +95,22 @@ class EntryUpdateView(generic.UpdateView):
 
         for zip_archive in zip_archives:
             path = Path(zip_archive.archive)
-            relative_path = path.relative_to(DISK_MUSTERING_DIR)
+            try:
+                relative_path = path.relative_to(DISK_MUSTERING_DIR)
+            except ValueError:
+                # If path is not relative to DISK_MUSTERING_DIR, use full path
+                relative_path = path
             styled_path = str(relative_path).replace('/', '<span class="path-separator">/</span>')
             zip_archive_dict = {
-                 'archive': zip_archive, 
-                 'zip_path': relative_path, 
+                 'archive': zip_archive,
+                 'zip_path': relative_path,
                  'zip_path_styled': styled_path,
                  'zip_contents': []}
-            zip_contents = ZipContent.objects.filter(zipArchive=zip_archive)
+            zip_contents = zip_archive.zipcontent_set.all()
 
             for zip_content in zip_contents:
                 zip_content_dict = {'zip_content': zip_content}
-                zip_content_dict['size_kb'] = int(zip_content.size_bytes / 1024) + (zip_content.size_bytes % 1024 > 0) if zip_content.size_bytes else 0
+                zip_content_dict['size_kb'] = int(zip_content.size_bytes / BYTES_PER_KB) + (zip_content.size_bytes % BYTES_PER_KB > 0) if zip_content.size_bytes else 0
 
                 # Only fetch FluxFile and MetaChunk for .a2r or .flux files
                 if zip_content.suffix in ['.a2r', '.flux']:

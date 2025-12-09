@@ -3,14 +3,33 @@ from .models import Entry
 from ckeditor.widgets import CKEditorWidget
 
 class EntryForm(forms.ModelForm):
-    description = forms.CharField(widget=CKEditorWidget())
+    description = forms.CharField(widget=CKEditorWidget(), required=False)
+
     class Meta:
         model = Entry
-        fields = '__all__'  # Includes all fields from the Entry model
+        # Only expose fields that should be user-editable
+        # Exclude internal/system fields: created_date, modified_date, uploaded
+        fields = [
+            'identifier',
+            'title',
+            'folder',
+            'fullArchivePath',
+            'publicationDate',
+            'description',
+            'mediatype',
+            'creators',
+            'collections',
+            'contributors',
+            'languages',
+            'subjects',
+            'needsWork',
+            'readyToUpload',
+            'hasFluxFile',
+            'hasFileContents',
+            'hasDiskImg',
+        ]
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'created_on': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
-            # Add any other specific widgets if required    
-            "description": CKEditorWidget(),
+            'publicationDate': forms.DateInput(attrs={'type': 'date'}),
+            'description': CKEditorWidget(),
         }
 

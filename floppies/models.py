@@ -75,7 +75,7 @@ class ZipContent(BaseModel):
     zipArchive = models.ForeignKey('ZipArchive', on_delete=models.CASCADE, blank=False, null=False)
     file = models.CharField(max_length=2048)
     md5sum = models.CharField(max_length=32, blank=True, null=True)
-    suffix = models.CharField(max_length=20, blank=True, null=True)
+    suffix = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     size_bytes = models.BigIntegerField(blank=True, null=True)
     def __str__(self):
         return self.file
@@ -110,17 +110,25 @@ class Entry(BaseModel):
             }
             return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
 
+    class ArchiveSyncStatus(models.TextChoices):
+        NEVER_CHECKED = "NC", _("Never Checked")
+        IN_SYNC = "IS", _("In Sync")
+        OUT_OF_SYNC = "OS", _("Out of Sync")
+        LOCAL_ONLY = "LO", _("Local Only (Not in Archive)")
+        ARCHIVE_ONLY = "AO", _("Archive Only (Not Local)")
+        ERROR = "ER", _("Sync Error")
 
-    identifier = models.CharField(max_length=500)
+
+    identifier = models.CharField(max_length=500, db_index=True)
     fullArchivePath = models.URLField(max_length=600, blank=True, null=True)
     folder = models.CharField(max_length=2048, blank=True, null=True)
-    title = models.CharField(max_length=500)
+    title = models.CharField(max_length=500, db_index=True)
     creators = models.ManyToManyField(Creator, blank=True)
     publicationDate = models.DateField(null=True, blank=True)
     collections = models.ManyToManyField(ArchCollection, blank=True)
     mediatype = models.CharField(
         max_length=2,
-        choices=Mediatypes,
+        choices=Mediatypes.choices,
         default=Mediatypes.SOFTWARE,
     )
     contributors = models.ManyToManyField(Contributor, blank=True)
@@ -133,9 +141,116 @@ class Entry(BaseModel):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
-    
+
+    # Internet Archive synchronization fields
+    archive_sync_status = models.CharField(
+        max_length=2,
+        choices=ArchiveSyncStatus.choices,
+        default=ArchiveSyncStatus.NEVER_CHECKED,
+        help_text="Current synchronization status with Internet Archive"
+    )
+    last_sync_check = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time sync status was checked against Internet Archive"
+    )
+    last_archive_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this entry was successfully synchronized with Internet Archive"
+    )
+    sync_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Details about synchronization differences or issues"
+    )
+
+    duplicates = models.ManyToManyField(
+        'self',
+        blank=True,
+        symmetrical=True,
+        help_text="Other entries that are exact duplicates (same MD5 hashes for all files)"
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['uploaded', 'readyToUpload', 'needsWork'], name='entry_upload_status_idx'),
+            models.Index(fields=['-modified_date'], name='entry_modified_date_idx'),
+        ]
+
     def get_absolute_url(self):
         return reverse("floppies:entry-update", kwargs={"pk": self.pk})
+
+    def get_file_hashes(self):
+        """
+        Returns a sorted set of MD5 hashes for all files in this entry's ZIP archives.
+        Used for duplicate detection.
+        """
+        hashes = set()
+        for zip_archive in self.ziparchives.all():
+            for zip_content in zip_archive.zipcontent_set.all():
+                if zip_content.md5sum:
+                    hashes.add(zip_content.md5sum)
+        return frozenset(hashes)
+
+    def is_duplicate_of(self, other_entry):
+        """
+        Check if this entry is an exact duplicate of another entry.
+        Returns True if all file MD5 hashes match exactly.
+        """
+        if not isinstance(other_entry, Entry):
+            return False
+
+        # Can't be duplicate of self
+        if self.id == other_entry.id:
+            return False
+
+        # Get hash sets for both entries
+        self_hashes = self.get_file_hashes()
+        other_hashes = other_entry.get_file_hashes()
+
+        # Must have files to compare
+        if not self_hashes or not other_hashes:
+            return False
+
+        # Check if hash sets are identical
+        return self_hashes == other_hashes
+
+    def find_duplicates(self):
+        """
+        Find all entries that are exact duplicates of this one.
+        Returns a queryset of duplicate Entry objects.
+        """
+        if not self.ziparchives.exists():
+            return Entry.objects.none()
+
+        my_hashes = self.get_file_hashes()
+        if not my_hashes:
+            return Entry.objects.none()
+
+        # Get all entries with ZIP archives (excluding self)
+        candidates = Entry.objects.exclude(id=self.id).filter(ziparchives__isnull=False).distinct()
+
+        duplicates = []
+        for candidate in candidates:
+            if self.is_duplicate_of(candidate):
+                duplicates.append(candidate.id)
+
+        return Entry.objects.filter(id__in=duplicates)
+
+    def mark_as_duplicate(self, other_entry):
+        """
+        Mark this entry and another entry as duplicates of each other.
+        The relationship is symmetrical - both will show as duplicates.
+        """
+        if self.is_duplicate_of(other_entry):
+            self.duplicates.add(other_entry)
+            return True
+        return False
+
+    def has_duplicates(self):
+        """Check if this entry has any known duplicates."""
+        return self.duplicates.exists()
 
     def get_media_files(self):
         """
@@ -159,12 +274,14 @@ class Entry(BaseModel):
 class ScriptRun(BaseModel):
     entry = models.ForeignKey('Entry', on_delete=models.CASCADE, blank=False, null=False)
     text = models.TextField(blank=False)
-    rumtime = models.DateTimeField(auto_now_add=True)
+    runtime = models.DateTimeField(auto_now_add=True)
     parentPath = models.CharField(max_length=2048, blank=True, null=True)
     function = models.CharField(max_length=512, blank=True, null=True)
     script = models.CharField(max_length=2048, blank=True, null=True)
+
     def __str__(self):
-        return self.parentPath + " " + self.rumtime.strftime("%Y-%m-%d %H:%M:%S")
+        path = self.parentPath or "No Path"
+        return f"{path} {self.runtime.strftime('%Y-%m-%d %H:%M:%S')}"
 
 class InfoChunk(BaseModel):
     # INFO Version (1 byte)

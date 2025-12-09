@@ -13,19 +13,29 @@ from datetime import datetime, timedelta
 import argparse
 import zipfile
 import hashlib
-from osxmetadata import OSXMetaData
+
+# Make macOS metadata optional (only available on macOS)
+try:
+    from osxmetadata import OSXMetaData
+    HAS_OSX_METADATA = True
+except ImportError:
+    HAS_OSX_METADATA = False
+    print("Warning: osxmetadata not available. macOS Finder tag features will be disabled.")
 
 import a2r_reader
 import zip_contents
 
-sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
+# Get Django project path from environment or use relative path
+PROJECT_PATH = os.environ.get('DJANGO_PROJECT_PATH', str(Path(__file__).parent.parent))
+sys.path.insert(0, PROJECT_PATH)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
-mustering_dir = "/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/"
 
+from django.conf import settings
 from floppies.models import Entry, ArchCollection, Contributor, Creator, FluxFile, InfoChunk, Language, MetaChunk, PhotoImage, Subject, TextFile, ZipArchive, ZipContent
 
-DISK_MUSTERING_DIR = '/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/'
+# Use configurable path from settings
+DISK_MUSTERING_DIR = settings.DISK_MUSTERING_DIR
 IMG_SUFFIXES = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
 def debug_print(folder_dict, message):
@@ -49,10 +59,11 @@ def get_files_from_dir(parent_path):
             continue
         file_path = os.path.join(parent_path, file_name)
         file_list.append(file_path)
-        
+
         #check if we're a directory, recurse there too
         if os.path.isdir(file_path):
-            file_list + get_files_from_dir(file_path)
+            # Fixed: was missing assignment operator
+            file_list.extend(get_files_from_dir(file_path))
 
     return file_list
 
@@ -65,17 +76,28 @@ def md5(fname):
 
 
 def get_files_with_tag_in_folder(tag_name, folder_path):
+    """
+    Get files with a specific macOS Finder tag.
+    Returns empty list if OSXMetaData is not available.
+    """
+    if not HAS_OSX_METADATA:
+        print(f"Warning: Cannot filter by tag '{tag_name}' - osxmetadata not available")
+        return []
+
     tagged_files = []
 
     # Walk through the directory
     for root, dirs, files in os.walk(folder_path):
         for folder in dirs:
             dir_path = os.path.join(root, folder)
-            metadata = OSXMetaData(dir_path)
-
-            # Check if the file has the specified tag
-            if any(tag.name == tag_name for tag in metadata.tags):
-                tagged_files.append(dir_path)
+            try:
+                metadata = OSXMetaData(dir_path)
+                # Check if the file has the specified tag
+                if any(tag.name == tag_name for tag in metadata.tags):
+                    tagged_files.append(dir_path)
+            except Exception as e:
+                print(f"Warning: Could not read metadata for {dir_path}: {e}")
+                continue
     return tagged_files
 
 def isRecent(file_path):
