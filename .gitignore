@@ -33,6 +33,15 @@ db.sqlite3-journal
 /static/
 /media/
 
+# Virtualenvs
+venv/
+.venv/
+
+# Database dumps
+*.sql
+*.sql.gz
+*.gz
+
 # Testing
 .pytest_cache/
 .coverage

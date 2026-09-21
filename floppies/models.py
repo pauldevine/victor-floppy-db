@@ -141,6 +141,7 @@ class Entry(BaseModel):
     hasDiskImg = models.BooleanField(default=False)
     needsWork = models.BooleanField(default=False)
     readyToUpload = models.BooleanField(default=False)
+    doNotUpload = models.BooleanField(default=False)
 
     # Internet Archive synchronization fields
     archive_sync_status = models.CharField(

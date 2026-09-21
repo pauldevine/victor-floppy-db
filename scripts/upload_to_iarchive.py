@@ -44,7 +44,7 @@ def upload_entry_to_internet_archive(entry):
     entry.save()
 
 def upload_new_entries():
-    new_entries = Entry.objects.filter(uploaded=False, readyToUpload=True)  # Adjust filter as necessary
+    new_entries = Entry.objects.filter(uploaded=False, readyToUpload=True, doNotUpload=False)
     count = new_entries.count()
     print(f"Uploading {count} new entries.")
     for entry in new_entries:
