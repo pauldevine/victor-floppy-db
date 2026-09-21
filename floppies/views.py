@@ -43,7 +43,7 @@ class IndexView(generic.ListView):
         if needsWork:
             queryset = queryset.filter(needsWork=True)
         if nextUpload:
-            queryset = queryset.filter(needsWork=False, readyToUpload=True, uploaded=False)
+            queryset = queryset.filter(needsWork=False, readyToUpload=True, uploaded=False, doNotUpload=False)
         return queryset
 
 class DetailView(generic.DetailView):
@@ -64,7 +64,7 @@ class EntryCreateView(generic.CreateView):
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
         "subjects", "photos", "randoFiles", "uploaded", "hasFluxFile", 
-        "hasFileContents", "needsWork", "readyToUpload"]
+        "hasFileContents", "needsWork", "readyToUpload", "doNotUpload"]
     template_name = "entry_form.html"
 
 
@@ -73,7 +73,7 @@ class EntryUpdateView(generic.UpdateView):
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
         "subjects", "mediatype", "uploaded", "hasFluxFile", 
-        "hasFileContents", "needsWork", "readyToUpload"]
+        "hasFileContents", "needsWork", "readyToUpload", "doNotUpload"]
     template_name = "entry_form.html"
 
     def get_context_data(self, **kwargs):

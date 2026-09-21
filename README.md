@@ -26,7 +26,7 @@ This Django application provides a comprehensive system for managing metadata ab
 
 - Python 3.8+
 - PostgreSQL 12+
-- Django 4.2.7
+- Django 5.0+ (5.0 is the minimum; the entry form templates require it)
 
 ## Installation
 

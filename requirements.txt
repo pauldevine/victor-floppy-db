@@ -1,5 +1,7 @@
 # Core Django
-Django==4.2.16
+# NOTE: 5.0+ is required -- the form templates use {{ field.as_field_group }},
+# which was introduced in Django 5.0. On 4.2 the entry form renders no fields.
+Django==5.0.11
 
 # Database
 psycopg2-binary==2.9.10
