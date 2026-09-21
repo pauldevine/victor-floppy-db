@@ -11,11 +11,8 @@
   - 640 ZipArchive records
   - 36,898 ZipContent records
 - **Migrations Applied:**
-  - `0001_initial` ✅
-  - `0002_rename_rumtime_to_runtime` ✅
-  - `0003_add_database_indexes` ✅
-  - `0004_add_duplicate_detection` ✅
-  - `0005_add_archive_sync_fields` ✅
+  - `0001_initial` ✅ (regenerated from models, Sept 2026; existing DBs adopt it with `--fake-initial`)
+  - `0002_ensure_entry_identifier_index` ✅
 
 ### 2. 🔍 Duplicate Detection Feature
 - **Management Command:** ✅ Working
