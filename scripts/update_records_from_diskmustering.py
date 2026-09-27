@@ -17,7 +17,9 @@ import a2r_reader
 import zip_contents
 import disk_mustering as mustering
 
-sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
+# Get Django project path from environment or use relative path
+PROJECT_PATH = os.environ.get('DJANGO_PROJECT_PATH', str(Path(__file__).parent.parent))
+sys.path.insert(0, PROJECT_PATH)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
 mustering_dir = "/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/"
