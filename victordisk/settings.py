@@ -139,11 +139,22 @@ CKEDITOR_CONFIGS = {
     'default': {
         'toolbar': 'Custom',
         'toolbar_Custom': [
+            ['Format'],
             ['Bold', 'Italic', 'Underline'],
             ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'],
             ['Link', 'Unlink'],
             ['RemoveFormat', 'Source']
-        ]
+        ],
+        # Block formats offered by the Format dropdown. "Formatted" is <pre>, which
+        # suits the fixed-width output of these 1980s disk README files.
+        'format_tags': 'p;h2;h3;h4;pre',
+        # No toolbar button produces inline <code>, so CKEditor's Advanced Content
+        # Filter would strip it from hand-edited Source view HTML. Allow it.
+        'extraAllowedContent': 'code',
+        # django-ckeditor bundles CKEditor 4.22.1, the last free 4.x release; newer
+        # 4.x versions are commercial LTS only. Suppress the upgrade nag, which is
+        # acceptable for this local single-user tool.
+        'versionCheck': False,
     }
 }
 
