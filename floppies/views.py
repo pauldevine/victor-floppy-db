@@ -2,6 +2,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.urls import reverse_lazy
+from django import forms
 from django.views import generic
 from django.core.paginator import Paginator
 from django.views.generic import ListView
@@ -59,20 +60,33 @@ class ResultsView(generic.DetailView):
     model = Entry
     template_name = "results.html"
 
-class EntryCreateView(generic.CreateView):
+class PublicationDateFormMixin:
+    """Render publicationDate as a date picker labelled like the archive's 'date' field."""
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        field = form.fields['publicationDate']
+        field.label = "Date"
+        field.help_text = "Publication date; sent to archive.org as 'date'."
+        # type="date" inputs only accept ISO values, so pin the format.
+        field.widget = forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d')
+        return form
+
+
+class EntryCreateView(PublicationDateFormMixin, generic.CreateView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "photos", "randoFiles", "uploaded", "hasFluxFile", 
+        "subjects", "photos", "randoFiles", "publicationDate", "uploaded", "hasFluxFile", 
         "hasFileContents", "needsWork", "readyToUpload", "doNotUpload"]
     template_name = "entry_form.html"
 
 
-class EntryUpdateView(generic.UpdateView):
+class EntryUpdateView(PublicationDateFormMixin, generic.UpdateView):
     model = Entry
     fields = ["identifier", "fullArchivePath", "folder", "title", "creators",
         "collections", "contributors", "languages", "description", 
-        "subjects", "mediatype", "uploaded", "hasFluxFile", 
+        "subjects", "mediatype", "publicationDate", "uploaded", "hasFluxFile", 
         "hasFileContents", "needsWork", "readyToUpload", "doNotUpload"]
     template_name = "entry_form.html"
 

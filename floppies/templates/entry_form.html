@@ -38,7 +38,9 @@
             <div class="form-group">{{ form.subjects.as_field_group }}</div>
             <div class="form-group">{{ form.contributors.as_field_group }}</div>
         </div>
-        {{ form.date.as_field_group }}
+        <div class="middleComponent">
+            <div class="form-group">{{ form.publicationDate.as_field_group }}</div>
+        </div>
         <div class="middleComponent">
             <div class="form-group">{{ form.collections.as_field_group }}</div>
             <div class="form-group">{{ form.languages.as_field_group }}</div>
