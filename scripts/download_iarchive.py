@@ -2,12 +2,15 @@
 #i used this script to initially populate the database
 import os
 import sys
+from pathlib import Path
 import json
 import django
 import internetarchive as ia
 import dateparser
 
-sys.path.insert(0, '/Users/pauldevine/projects/disk_db/victordisk')
+# Get Django project path from environment or use relative path
+PROJECT_PATH = os.environ.get('DJANGO_PROJECT_PATH', str(Path(__file__).parent.parent))
+sys.path.insert(0, PROJECT_PATH)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
 
