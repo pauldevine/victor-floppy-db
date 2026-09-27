@@ -97,18 +97,18 @@ class Entry(BaseModel):
         def get_mediatype_key(cls, name):
             # Mapping of string representations to Mediatypes choices
             name_to_key = {
-                "texts": cls.Mediatypes.TEXTS,
-                "etree": cls.Mediatypes.ETREE,
-                "audio": cls.Mediatypes.AUDIO,
-                "movies": cls.Mediatypes.MOVIES,
-                "software": cls.Mediatypes.SOFTWARE,
-                "image": cls.Mediatypes.IMAGE,
-                "data": cls.Mediatypes.DATA,
-                "web": cls.Mediatypes.WEB,
-                "collection": cls.Mediatypes.COLLECTION,
-                "account": cls.Mediatypes.ACCOUNT
+                "texts": cls.TEXTS,
+                "etree": cls.ETREE,
+                "audio": cls.AUDIO,
+                "movies": cls.MOVIES,
+                "software": cls.SOFTWARE,
+                "image": cls.IMAGE,
+                "data": cls.DATA,
+                "web": cls.WEB,
+                "collection": cls.COLLECTION,
+                "account": cls.ACCOUNT
             }
-            return name_to_key.get(name.lower(), cls.Mediatypes.SOFTWARE)
+            return name_to_key.get(name.lower(), cls.SOFTWARE)
 
     class ArchiveSyncStatus(models.TextChoices):
         NEVER_CHECKED = "NC", _("Never Checked")

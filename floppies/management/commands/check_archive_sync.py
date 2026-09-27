@@ -124,7 +124,7 @@ class Command(BaseCommand):
                 ]
                 for detail in out_of_sync_details[:10]:  # Show first 10
                     self.stdout.write(f'  • {detail["identifier"]}')
-                    for diff in detail['differences'][:3]:  # Show first 3 differences
+                    for diff in detail['differences']:
                         self.stdout.write(f'    - {diff}')
 
                 if len(out_of_sync_details) > 10:

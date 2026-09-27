@@ -431,6 +431,35 @@ class EntryUpdateViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('zip_archives', response.context)
 
+    def test_update_view_renders_publication_date(self):
+        """The date is shown as an ISO-valued date picker."""
+        self.entry.publicationDate = datetime(1984, 4, 26).date()
+        self.entry.save()
+        response = self.client.get(
+            reverse('floppies:entry-update', kwargs={'pk': self.entry.pk})
+        )
+        self.assertContains(response, 'type="date"')
+        self.assertContains(response, 'value="1984-04-26"')
+
+    def test_update_view_saves_publication_date(self):
+        """Posting the form updates, and can clear, publicationDate."""
+        url = reverse('floppies:entry-update', kwargs={'pk': self.entry.pk})
+        data = {
+            'identifier': self.entry.identifier,
+            'title': self.entry.title,
+            'mediatype': Entry.Mediatypes.SOFTWARE,
+            'publicationDate': '1984-04-26',
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302, getattr(response, 'context', None) and response.context['form'].errors)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.publicationDate, datetime(1984, 4, 26).date())
+
+        data['publicationDate'] = ''
+        self.client.post(url, data)
+        self.entry.refresh_from_db()
+        self.assertIsNone(self.entry.publicationDate)
+
 
 class SearchViewTest(TestCase):
     """Test the search view."""
@@ -977,3 +1006,88 @@ class ArchiveSyncUtilsTestCase(TestCase):
         except archive_sync.ArchiveSyncError:
             # If we get an error, IA is not available
             self.assertFalse(archive_sync.IA_AVAILABLE)
+
+
+class FakeArchiveItem:
+    """Stand-in for internetarchive.Item holding only metadata."""
+
+    def __init__(self, metadata):
+        self.metadata = metadata
+
+
+class CompareMetadataTestCase(TestCase):
+    """Test that compare_metadata ignores storage differences but catches real drift."""
+
+    def setUp(self):
+        self.entry = Entry.objects.create(
+            identifier="test-compare-001",
+            title="Test Disk",
+            description="<p>Some <b>HTML</b> description</p>",
+            mediatype=Entry.Mediatypes.SOFTWARE,
+            publicationDate=datetime(2023, 12, 24).date(),
+        )
+        self.entry.subjects.add(Subject.objects.create(name="Victor 9000"))
+        self.entry.subjects.add(Subject.objects.create(name=" ACT Sirius 1"))
+        self.entry.collections.add(ArchCollection.objects.create(name="vintagesoftware"))
+        self.meta = {
+            'title': "Test Disk",
+            'description': "<p>Some <b>HTML</b> description</p>",
+            'mediatype': "software",
+            'publicdate': "2023-12-24 00:08:18",
+            'subject': "Victor 9000; ACT Sirius 1",
+            'collection': ["vintagesoftware"],
+        }
+
+    def compare(self):
+        from floppies.archive_sync import compare_metadata
+        return compare_metadata(self.entry, FakeArchiveItem(self.meta))
+
+    def test_storage_differences_are_in_sync(self):
+        """HTML descriptions, ';'-joined subjects, whitespace and upload dates are not drift."""
+        self.assertEqual(self.compare(), (True, []))
+
+    def test_description_change_is_reported(self):
+        self.meta['description'] = "<p>Different</p>"
+        in_sync, differences = self.compare()
+        self.assertFalse(in_sync)
+        self.assertTrue(differences[0].startswith("Description differs"))
+
+    def test_archive_date_mismatch_is_reported(self):
+        self.meta['date'] = "1984-04-26"
+        in_sync, differences = self.compare()
+        self.assertFalse(in_sync)
+        self.assertIn("local is the archive upload date", differences[0])
+
+    def test_partial_archive_date_matches_at_its_precision(self):
+        self.entry.publicationDate = datetime(1984, 4, 26).date()
+        self.meta['date'] = "1984"
+        self.assertEqual(self.compare(), (True, []))
+
+    def test_local_date_missing_on_archive_is_reported(self):
+        self.entry.publicationDate = datetime(1984, 4, 26).date()
+        in_sync, differences = self.compare()
+        self.assertFalse(in_sync)
+        self.assertIn("archive has no date", differences[0])
+
+    def test_collection_drift_is_reported(self):
+        self.meta['collection'] = ["floppysoftware", "vintagesoftware"]
+        in_sync, differences = self.compare()
+        self.assertFalse(in_sync)
+        self.assertEqual(differences, ["Collections: only local=[], only archive=['floppysoftware']"])
+
+    def test_split_values(self):
+        from floppies.archive_sync import split_values
+        self.assertEqual(split_values("a; b ;c"), ['a', 'b', 'c'])
+        self.assertEqual(split_values(["a", " b"]), ['a', 'b'])
+        self.assertEqual(split_values(None), [])
+
+    def test_parse_archive_date(self):
+        from floppies.archive_sync import parse_archive_date
+        self.assertEqual(parse_archive_date("1984-04-26"), datetime(1984, 4, 26).date())
+        self.assertEqual(parse_archive_date("1984-04-26T10:00:00Z"), datetime(1984, 4, 26).date())
+        self.assertIsNone(parse_archive_date("1984"))
+        self.assertIsNone(parse_archive_date(""))
+
+    def test_get_mediatype_key(self):
+        self.assertEqual(Entry.Mediatypes.get_mediatype_key("Texts"), Entry.Mediatypes.TEXTS)
+        self.assertEqual(Entry.Mediatypes.get_mediatype_key("unknown"), Entry.Mediatypes.SOFTWARE)

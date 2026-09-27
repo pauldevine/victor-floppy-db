@@ -63,9 +63,76 @@ def get_archive_item(identifier: str):
         raise ArchiveSyncError(f"Failed to fetch item from Internet Archive: {e}")
 
 
+def first_value(value) -> str:
+    """Return a single string from an archive metadata value (which may be a list)."""
+    if isinstance(value, list):
+        value = value[0] if value else ''
+    return (value or '').strip()
+
+
+def split_values(value) -> List[str]:
+    """
+    Normalize a multi-valued archive field into a list of clean names.
+
+    Internet Archive stores repeated fields either as a list or as a single
+    ';'-separated string (e.g. "Victor 9000; ACT Sirius 1"), so both forms are
+    split and stripped.
+    """
+    if not value:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    names = []
+    for item in value:
+        names.extend(part.strip() for part in str(item).split(';'))
+    return [name for name in names if name]
+
+
+def local_names(related_manager) -> List[str]:
+    """Return stripped names from an Entry many-to-many relation."""
+    return [obj.name.strip() for obj in related_manager.all() if obj.name and obj.name.strip()]
+
+
+def parse_archive_date(archive_date: str):
+    """
+    Parse an archive 'date' value into a date, or None if it is empty or partial.
+
+    Archive dates may be 'YYYY', 'YYYY-MM', 'YYYY-MM-DD' or a full timestamp;
+    only values with a full day can be stored in a DateField.
+    """
+    if len(archive_date) < 10:
+        return None
+    try:
+        return datetime.fromisoformat(archive_date[:10]).date()
+    except ValueError:
+        return None
+
+
+def is_upload_date(local_date, archive_meta) -> bool:
+    """
+    True if a local publicationDate is really the archive upload date.
+
+    Older imports copied the archive's 'publicdate' (when the item was uploaded)
+    into publicationDate, so that value does not describe the software itself.
+    """
+    if not local_date:
+        return False
+    return first_value(archive_meta.get('publicdate'))[:10] == local_date.isoformat()
+
+
+def _format_set_difference(label, local, archive) -> str:
+    only_local = sorted(set(local) - set(archive))
+    only_archive = sorted(set(archive) - set(local))
+    return f"{label}: only local={only_local}, only archive={only_archive}"
+
+
 def compare_metadata(entry, archive_item) -> Tuple[bool, List[str]]:
     """
     Compare local Entry metadata with Internet Archive item metadata.
+
+    Values are normalized before comparison so that storage differences
+    (';'-joined vs list values, surrounding whitespace, missing optional
+    fields) are not reported as drift.
 
     Args:
         entry: Entry model instance
@@ -83,59 +150,54 @@ def compare_metadata(entry, archive_item) -> Tuple[bool, List[str]]:
     archive_meta = archive_item.metadata
 
     # Compare title
-    archive_title = archive_meta.get('title', '')
-    if isinstance(archive_title, list):
-        archive_title = archive_title[0] if archive_title else ''
-    if entry.title != archive_title:
-        differences.append(f"Title: local='{entry.title}' vs archive='{archive_title}'")
+    archive_title = first_value(archive_meta.get('title'))
+    local_title = (entry.title or '').strip()
+    if local_title != archive_title:
+        differences.append(f"Title: local='{local_title}' vs archive='{archive_title}'")
 
-    # Compare description
-    archive_desc = archive_meta.get('description', '')
-    if isinstance(archive_desc, list):
-        archive_desc = archive_desc[0] if archive_desc else ''
-    # Strip HTML tags for comparison (local uses RichTextField)
-    from django.utils.html import strip_tags
-    local_desc = strip_tags(entry.description or '')
+    # Compare description. Both sides store the same HTML, so compare it as-is.
+    archive_desc = first_value(archive_meta.get('description'))
+    local_desc = (entry.description or '').strip()
     if local_desc != archive_desc:
         differences.append(f"Description differs (length: local={len(local_desc)}, archive={len(archive_desc)})")
 
     # Compare mediatype
-    archive_mediatype = archive_meta.get('mediatype', '')
+    archive_mediatype = first_value(archive_meta.get('mediatype')).lower()
     local_mediatype_name = entry.get_mediatype_display().lower()
     if local_mediatype_name != archive_mediatype:
         differences.append(f"Media type: local='{local_mediatype_name}' vs archive='{archive_mediatype}'")
 
-    # Compare date
-    archive_date = archive_meta.get('date', '')
-    if isinstance(archive_date, list):
-        archive_date = archive_date[0] if archive_date else ''
+    # Compare date. The archive may hold a partial date ('1984'), so match at
+    # the archive's precision. A local value equal to the upload date is not a
+    # real publication date and is ignored when the archive has no date.
+    archive_date = first_value(archive_meta.get('date'))
     local_date = entry.publicationDate.isoformat() if entry.publicationDate else ''
-    if local_date != archive_date:
-        differences.append(f"Date: local='{local_date}' vs archive='{archive_date}'")
+    if archive_date:
+        if not local_date.startswith(archive_date[:10]):
+            note = " (local is the archive upload date)" if is_upload_date(entry.publicationDate, archive_meta) else ""
+            differences.append(f"Date: local='{local_date}' vs archive='{archive_date}'{note}")
+    elif local_date and not is_upload_date(entry.publicationDate, archive_meta):
+        differences.append(f"Date: local='{local_date}' vs archive has no date")
 
     # Compare creators
-    archive_creators = archive_meta.get('creator', [])
-    if isinstance(archive_creators, str):
-        archive_creators = [archive_creators]
-    local_creators = [c.name for c in entry.creators.all()]
+    archive_creators = split_values(archive_meta.get('creator'))
+    local_creators = local_names(entry.creators)
     if set(local_creators) != set(archive_creators):
-        differences.append(f"Creators: local={local_creators} vs archive={archive_creators}")
+        differences.append(_format_set_difference("Creators", local_creators, archive_creators))
 
     # Compare subjects
-    archive_subjects = archive_meta.get('subject', [])
-    if isinstance(archive_subjects, str):
-        archive_subjects = [archive_subjects]
-    local_subjects = [s.name for s in entry.subjects.all()]
+    archive_subjects = split_values(archive_meta.get('subject'))
+    local_subjects = local_names(entry.subjects)
     if set(local_subjects) != set(archive_subjects):
-        differences.append(f"Subjects differ (local={len(local_subjects)}, archive={len(archive_subjects)})")
+        differences.append(_format_set_difference("Subjects", local_subjects, archive_subjects))
 
-    # Compare collections
-    archive_collections = archive_meta.get('collection', [])
-    if isinstance(archive_collections, str):
-        archive_collections = [archive_collections]
-    local_collections = [c.name for c in entry.collections.all()]
+    # Compare collections. Archive curators can move items between
+    # collections after upload, so a difference here usually means the local
+    # copy is stale.
+    archive_collections = split_values(archive_meta.get('collection'))
+    local_collections = local_names(entry.collections)
     if set(local_collections) != set(archive_collections):
-        differences.append(f"Collections differ (local={len(local_collections)}, archive={len(archive_collections)})")
+        differences.append(_format_set_difference("Collections", local_collections, archive_collections))
 
     is_in_sync = len(differences) == 0
     return is_in_sync, differences
@@ -242,28 +304,21 @@ def pull_from_archive(entry, dry_run=False) -> Dict:
         changes = []
 
         # Update title
-        archive_title = archive_meta.get('title', '')
-        if isinstance(archive_title, list):
-            archive_title = archive_title[0] if archive_title else ''
-        if entry.title != archive_title and archive_title:
+        archive_title = first_value(archive_meta.get('title'))
+        if (entry.title or '').strip() != archive_title and archive_title:
             changes.append(f"Title: '{entry.title}' → '{archive_title}'")
             if not dry_run:
                 entry.title = archive_title
 
         # Update description
-        archive_desc = archive_meta.get('description', '')
-        if isinstance(archive_desc, list):
-            archive_desc = archive_desc[0] if archive_desc else ''
-        if archive_desc:
-            from django.utils.html import strip_tags
-            local_desc = strip_tags(entry.description or '')
-            if local_desc != archive_desc:
-                changes.append(f"Description updated (length: {len(archive_desc)} chars)")
-                if not dry_run:
-                    entry.description = archive_desc
+        archive_desc = first_value(archive_meta.get('description'))
+        if archive_desc and (entry.description or '').strip() != archive_desc:
+            changes.append(f"Description updated (length: {len(archive_desc)} chars)")
+            if not dry_run:
+                entry.description = archive_desc
 
         # Update mediatype
-        archive_mediatype = archive_meta.get('mediatype', '')
+        archive_mediatype = first_value(archive_meta.get('mediatype'))
         if archive_mediatype:
             mediatype_key = entry.Mediatypes.get_mediatype_key(archive_mediatype)
             if entry.mediatype != mediatype_key:
@@ -272,27 +327,16 @@ def pull_from_archive(entry, dry_run=False) -> Dict:
                     entry.mediatype = mediatype_key
 
         # Update date
-        archive_date = archive_meta.get('date', '')
-        if isinstance(archive_date, list):
-            archive_date = archive_date[0] if archive_date else ''
-        if archive_date:
-            from datetime import datetime
-            try:
-                parsed_date = datetime.fromisoformat(archive_date.replace('Z', '+00:00')).date()
-                if entry.publicationDate != parsed_date:
-                    changes.append(f"Date: {entry.publicationDate} → {parsed_date}")
-                    if not dry_run:
-                        entry.publicationDate = parsed_date
-            except ValueError:
-                pass  # Skip invalid dates
+        parsed_date = parse_archive_date(first_value(archive_meta.get('date')))
+        if parsed_date and entry.publicationDate != parsed_date:
+            changes.append(f"Date: {entry.publicationDate} → {parsed_date}")
+            if not dry_run:
+                entry.publicationDate = parsed_date
 
         # Update creators
-        archive_creators = archive_meta.get('creator', [])
-        if isinstance(archive_creators, str):
-            archive_creators = [archive_creators]
+        archive_creators = split_values(archive_meta.get('creator'))
         if archive_creators:
-            local_creator_names = [c.name for c in entry.creators.all()]
-            if set(local_creator_names) != set(archive_creators):
+            if set(local_names(entry.creators)) != set(archive_creators):
                 changes.append(f"Creators: {len(archive_creators)} from archive")
                 if not dry_run:
                     entry.creators.clear()
@@ -301,12 +345,9 @@ def pull_from_archive(entry, dry_run=False) -> Dict:
                         entry.creators.add(creator)
 
         # Update subjects
-        archive_subjects = archive_meta.get('subject', [])
-        if isinstance(archive_subjects, str):
-            archive_subjects = [archive_subjects]
+        archive_subjects = split_values(archive_meta.get('subject'))
         if archive_subjects:
-            local_subject_names = [s.name for s in entry.subjects.all()]
-            if set(local_subject_names) != set(archive_subjects):
+            if set(local_names(entry.subjects)) != set(archive_subjects):
                 changes.append(f"Subjects: {len(archive_subjects)} from archive")
                 if not dry_run:
                     entry.subjects.clear()
@@ -315,12 +356,9 @@ def pull_from_archive(entry, dry_run=False) -> Dict:
                         entry.subjects.add(subject)
 
         # Update collections
-        archive_collections = archive_meta.get('collection', [])
-        if isinstance(archive_collections, str):
-            archive_collections = [archive_collections]
+        archive_collections = split_values(archive_meta.get('collection'))
         if archive_collections:
-            local_collection_names = [c.name for c in entry.collections.all()]
-            if set(local_collection_names) != set(archive_collections):
+            if set(local_names(entry.collections)) != set(archive_collections):
                 changes.append(f"Collections: {len(archive_collections)} from archive")
                 if not dry_run:
                     entry.collections.clear()
@@ -385,44 +423,46 @@ def push_to_archive(entry, dry_run=False) -> Dict:
             changes.append(f"Title: {entry.title}")
 
         if entry.description:
-            from django.utils.html import strip_tags
-            metadata['description'] = strip_tags(entry.description)
+            # Send the HTML as stored; the archive renders it in the description.
+            metadata['description'] = entry.description
             changes.append(f"Description: {len(metadata['description'])} chars")
 
         if entry.mediatype:
             metadata['mediatype'] = entry.get_mediatype_display().lower()
             changes.append(f"Media type: {metadata['mediatype']}")
 
-        if entry.publicationDate:
+        # Skip a publicationDate that is only the archive upload date, so it
+        # never overwrites (or invents) a real publication date on the archive.
+        if entry.publicationDate and not is_upload_date(entry.publicationDate, archive_item.metadata):
             metadata['date'] = entry.publicationDate.isoformat()
             changes.append(f"Date: {metadata['date']}")
 
         # Add creators
-        creators = [c.name for c in entry.creators.all()]
+        creators = local_names(entry.creators)
         if creators:
             metadata['creator'] = creators
             changes.append(f"Creators: {len(creators)}")
 
         # Add subjects
-        subjects = [s.name for s in entry.subjects.all()]
+        subjects = local_names(entry.subjects)
         if subjects:
             metadata['subject'] = subjects
             changes.append(f"Subjects: {len(subjects)}")
 
         # Add collections
-        collections = [c.name for c in entry.collections.all()]
+        collections = local_names(entry.collections)
         if collections:
             metadata['collection'] = collections
             changes.append(f"Collections: {len(collections)}")
 
         # Add contributors
-        contributors = [c.name for c in entry.contributors.all()]
+        contributors = local_names(entry.contributors)
         if contributors:
             metadata['contributor'] = contributors
             changes.append(f"Contributors: {len(contributors)}")
 
         # Add languages
-        languages = [lang.name for lang in entry.languages.all()]
+        languages = local_names(entry.languages)
         if languages:
             metadata['language'] = languages
             changes.append(f"Languages: {len(languages)}")
