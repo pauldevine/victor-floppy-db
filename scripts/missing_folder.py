@@ -15,7 +15,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "victordisk.settings")
 django.setup()
 mustering_dir = "/Users/pauldevine/Documents/Victor9k Stuff/Disk Mustering Area/"
 
-from floppies.models import Entry, ArchCollection, Contributor, Creator, Language, Subject, Mediatype
+from floppies.models import Entry, ArchCollection, Contributor, Creator, Language, Subject
 
 def check_file_exists(directory, filename):
     if not isinstance(directory, str) or not isinstance(filename, str):
